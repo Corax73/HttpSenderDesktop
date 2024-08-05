@@ -21,8 +21,10 @@ func main() {
 
 	httpSender := httpSender.HttpSender{
 		Input:   widget.NewEntry(),
-		Display: widget.NewLabel(""),
+		Display: widget.NewEntry(),
+		Params: widget.NewEntry(),
 	}
+	httpSender.Params.SetPlaceHolder("Enter parameters by JSON")
 	httpSender.SendBtn = httpSender.SendBtnHandler()
 	httpSender.Input.SetPlaceHolder("Enter the address bar for the request")
 	httpSender.ScrollContainer = httpSender.GetScrollDisplay()
@@ -30,8 +32,13 @@ func main() {
 	content := container.NewGridWithColumns(
 		1,
 		container.NewGridWithRows(
-			2,
+			1,
 			httpSender.Input,
+		),
+		container.NewGridWithColumns(
+			3,
+			httpSender.GetSelectMethod(),
+			httpSender.Params,
 			httpSender.SendBtn,
 		),
 		container.NewGridWithRows(
