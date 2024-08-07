@@ -20,13 +20,16 @@ func main() {
 	})
 
 	httpSender := httpSender.HttpSender{
-		Input:   widget.NewEntry(),
-		Display: widget.NewEntry(),
-		Params: widget.NewEntry(),
+		Input:       widget.NewEntry(),
+		Display:     widget.NewEntry(),
+		Params:      widget.NewEntry(),
+		RepeatEntry: widget.NewEntry(),
 	}
+	httpSender.Repeat = 1
 	httpSender.Params.SetPlaceHolder("Enter parameters by JSON")
 	httpSender.SendBtn = httpSender.SendBtnHandler()
 	httpSender.Input.SetPlaceHolder("Enter the address bar for the request")
+	httpSender.RepeatEntry.SetPlaceHolder("Enter the number of repetitions, default is 1")
 	httpSender.ScrollContainer = httpSender.GetScrollDisplay()
 
 	content := container.NewGridWithColumns(
@@ -35,11 +38,15 @@ func main() {
 			1,
 			httpSender.Input,
 		),
-		container.NewGridWithColumns(
-			3,
-			httpSender.GetSelectMethod(),
+		container.NewGridWithRows(
+			2,
 			httpSender.Params,
-			httpSender.SendBtn,
+			container.NewGridWithColumns(
+				3,
+				httpSender.GetSelectMethod(),
+				httpSender.RepeatEntry,
+				httpSender.SendBtn,
+			),
 		),
 		container.NewGridWithRows(
 			1,
