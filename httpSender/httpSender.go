@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"net/url"
 
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
@@ -55,17 +54,8 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 	case "GET":
 		resp, err = http.Get(httpSender.Input.Text)
 	case "POST":
-		var client = &http.Client{}
-		var param = url.Values{}
-		id := httpSender.GetParams()
-		param.Set("id", id)
-		var payload = bytes.NewBufferString(param.Encode())
-		request, err := http.NewRequest("POST", httpSender.Input.Text, payload)
-		if err != nil {
-			httpSender.showResp(err.Error())
-		}
-		request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		resp, err = client.Do(request)
+		responseBody := httpSender.GetParams()
+		resp, err = http.Post(httpSender.Input.Text, "application/json", responseBody)
 		if err != nil {
 			httpSender.showResp(err.Error())
 		}
@@ -92,14 +82,13 @@ func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
 	})
 }
 
-func (httpSender *HttpSender) GetParams() string {
-	type ParseId struct {
-		Id string
-	}
-	myVal := ParseId{}
-	err := json.Unmarshal([]byte(httpSender.Params.Text), &myVal)
+func (httpSender *HttpSender) GetParams() *bytes.Buffer {
+	data := make(map[string]interface{})
+	err := json.Unmarshal([]byte(httpSender.Params.Text), &data)
 	if err != nil {
 		httpSender.showResp(err.Error())
 	}
-	return myVal.Id
+	postBody, _ := json.Marshal(data)
+	responseBody := bytes.NewBuffer(postBody)
+	return responseBody
 }
