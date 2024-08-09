@@ -16,15 +16,16 @@ import (
 const repetitionNumberStub = 0
 
 type State struct {
-	Method string
-	Repeat int
+	Method        string
+	Repeat, Delay int
 }
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry *widget.Entry
-	ScrollContainer                     *container.Scroll
-	SendBtn                             *widget.Button
+	Input, Display, Params, RepeatEntry, DelayEntry *widget.Entry
+	ScrollContainer                                 *container.Scroll
+	SendBtn                                         *widget.Button
+	DisplayRepeat                                   *widget.Label
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
@@ -33,6 +34,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			httpSender.getRepeat()
 			httpSender.Display.SetText("")
 			for i := 0; i < httpSender.Repeat; i++ {
+				httpSender.showRepeat(i + 1)
 				resp, err := httpSender.SendByMethod()
 				if err == nil {
 					body, err := io.ReadAll(resp.Body)
@@ -42,15 +44,18 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 						if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
 							httpSender.showResp(prettyJSON.String(), i+1)
 						} else {
-							httpSender.showResp(err.Error(), repetitionNumberStub)
+							httpSender.showResp(err.Error(), i+1)
 						}
 					} else {
-						httpSender.showResp(err.Error(), repetitionNumberStub)
+						httpSender.showResp(err.Error(), i+1)
 					}
 				} else {
-					httpSender.showResp(err.Error(), repetitionNumberStub)
+					httpSender.showResp(err.Error(), i+1)
 				}
-				time.Sleep(200 * time.Millisecond)
+				if httpSender.Repeat > 1 {
+					httpSender.getDelay()
+					time.Sleep(time.Duration(httpSender.Delay) * time.Millisecond)
+				}
 			}
 		} else {
 			httpSender.showResp("Enter the request string", repetitionNumberStub)
@@ -93,6 +98,14 @@ func (httpSender *HttpSender) showResp(data string, repeatNumber int) {
 	}
 }
 
+func (httpSender *HttpSender) showRepeat(repeatNumber int) {
+	var strBuilder strings.Builder
+	strBuilder.WriteString("Repeat №")
+	strBuilder.WriteString(strconv.Itoa(repeatNumber))
+	httpSender.DisplayRepeat.SetText(strBuilder.String())
+	strBuilder.Reset()
+}
+
 func (httpSender *HttpSender) GetScrollDisplay() *container.Scroll {
 	return container.NewVScroll(container.NewGridWithRows(
 		1,
@@ -128,6 +141,15 @@ func (httpSender *HttpSender) getRepeat() {
 		number, err := strconv.Atoi(httpSender.RepeatEntry.Text)
 		if err == nil {
 			httpSender.Repeat = number
+		}
+	}
+}
+
+func (httpSender *HttpSender) getDelay() {
+	if httpSender.DelayEntry.Text != "" {
+		number, err := strconv.Atoi(httpSender.DelayEntry.Text)
+		if err == nil {
+			httpSender.Delay = number
 		}
 	}
 }
