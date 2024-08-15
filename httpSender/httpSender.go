@@ -75,6 +75,13 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 		if err != nil {
 			httpSender.showResp(err.Error(), repetitionNumberStub)
 		}
+	case "DELETE":
+		client := &http.Client{}
+		req, errReq := http.NewRequest("DELETE", httpSender.Input.Text, nil)
+		if errReq != nil {
+			err = errReq
+		}
+		resp, err = client.Do(req)
 	default:
 		return resp, err
 	}
@@ -114,7 +121,7 @@ func (httpSender *HttpSender) GetScrollDisplay() *container.Scroll {
 }
 
 func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
-	resp := widget.NewSelect([]string{"GET", "POST"}, func(value string) {
+	resp := widget.NewSelect([]string{"GET", "POST", "DELETE"}, func(value string) {
 		httpSender.Method = value
 	})
 	resp.PlaceHolder = "Select method"
