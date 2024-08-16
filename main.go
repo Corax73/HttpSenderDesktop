@@ -20,11 +20,11 @@ func main() {
 	})
 
 	httpSender := httpSender.HttpSender{
-		Input:       widget.NewEntry(),
-		Display:     widget.NewEntry(),
-		Params:      widget.NewEntry(),
-		RepeatEntry: widget.NewEntry(),
-		DelayEntry: widget.NewEntry(),
+		Input:         widget.NewEntry(),
+		Display:       widget.NewEntry(),
+		Params:        widget.NewEntry(),
+		RepeatEntry:   widget.NewEntry(),
+		DelayEntry:    widget.NewEntry(),
 		DisplayRepeat: widget.NewLabel("Repeat №"),
 	}
 	httpSender.Repeat = 1
@@ -35,6 +35,8 @@ func main() {
 	httpSender.RepeatEntry.SetPlaceHolder("Enter the number of repetitions, default is 1")
 	httpSender.DelayEntry.SetPlaceHolder("Enter delay, default is 200 milliseconds")
 	httpSender.ScrollContainer = httpSender.GetScrollDisplay()
+	httpSender.ClearResultBtn = httpSender.ClearResultBtnHandler()
+	httpSender.CopyBtn = httpSender.CopyBtnHandler()
 
 	content := container.NewGridWithColumns(
 		1,
@@ -46,20 +48,25 @@ func main() {
 			3,
 			httpSender.Params,
 			container.NewGridWithColumns(
-				2,
+				3,
 				httpSender.GetSelectMethod(),
+				httpSender.DelayEntry,
 				httpSender.RepeatEntry,
 			),
 			container.NewGridWithColumns(
 				3,
-				httpSender.DelayEntry,
 				httpSender.SendBtn,
+				httpSender.ClearResultBtn,
 				httpSender.DisplayRepeat,
 			),
 		),
 		container.NewGridWithRows(
 			1,
 			httpSender.ScrollContainer,
+		),
+		container.NewGridWithRows(
+			1,
+			httpSender.CopyBtn,
 		),
 		container.NewGridWithColumns(
 			1,

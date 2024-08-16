@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.design/x/clipboard"
+
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
@@ -24,7 +26,7 @@ type HttpSender struct {
 	State
 	Input, Display, Params, RepeatEntry, DelayEntry *widget.Entry
 	ScrollContainer                                 *container.Scroll
-	SendBtn                                         *widget.Button
+	SendBtn, ClearResultBtn, CopyBtn                *widget.Button
 	DisplayRepeat                                   *widget.Label
 }
 
@@ -89,19 +91,34 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 }
 
 func (httpSender *HttpSender) showResp(data string, repeatNumber int) {
+	var strBuilder strings.Builder
 	if httpSender.Repeat > 1 {
-		var strBuilder strings.Builder
-		strBuilder.WriteString(httpSender.Display.Text)
+		if httpSender.Display.Text != "" {
+			strBuilder.WriteString("[")
+			data := strings.Trim(httpSender.Display.Text, "[")
+			data = strings.Trim(data, "]")
+			strBuilder.WriteString(data)
+			strBuilder.WriteString(",")
+		}
+		strBuilder.WriteString("{")
 		strBuilder.WriteString("\n")
-		strBuilder.WriteString("Repeat number: ")
+		strBuilder.WriteString("\"repeat_number\": ")
 		strBuilder.WriteString(strconv.Itoa(repeatNumber))
+		strBuilder.WriteString(",")
 		strBuilder.WriteString("\n")
-		strBuilder.WriteString("Data: \n")
+		strBuilder.WriteString("\"data\": \n")
 		strBuilder.WriteString(data)
+		strBuilder.WriteString("}")
+		strBuilder.WriteString("\n")
+		strBuilder.WriteString("]")
 		httpSender.Display.SetText(strBuilder.String())
 		strBuilder.Reset()
 	} else {
+		strBuilder.WriteString("[")
+		strBuilder.WriteString("{")
 		httpSender.Display.SetText(data)
+		strBuilder.WriteString("}")
+		strBuilder.WriteString("]")
 	}
 }
 
@@ -159,4 +176,20 @@ func (httpSender *HttpSender) getDelay() {
 			httpSender.Delay = number
 		}
 	}
+}
+
+func (httpSender *HttpSender) ClearResultBtnHandler() *widget.Button {
+	return widget.NewButton("Clear result", func() {
+		httpSender.Display.SetText("")
+	})
+}
+
+func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
+	return widget.NewButton("Copy to clipboard", func() {
+		err := clipboard.Init()
+		if err != nil {
+			httpSender.showResp(err.Error(), repetitionNumberStub)
+		}
+		clipboard.Write(clipboard.FmtText, []byte(httpSender.Display.Text))
+	})
 }
