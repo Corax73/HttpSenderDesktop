@@ -79,11 +79,20 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 		}
 	case "DELETE":
 		client := &http.Client{}
-		req, errReq := http.NewRequest("DELETE", httpSender.Input.Text, nil)
-		if errReq != nil {
-			err = errReq
+		var req *http.Request
+		req, err = http.NewRequest(http.MethodDelete, httpSender.Input.Text, nil)
+		if err == nil {
+			resp, err = client.Do(req)
 		}
-		resp, err = client.Do(req)
+	case "PUT":
+		responseBody := httpSender.getParams()
+		client := &http.Client{}
+		var req *http.Request
+		req, err = http.NewRequest(http.MethodPut, httpSender.Input.Text, responseBody)
+		req.Header.Set("Content-Type", "application/json")
+		if err == nil {
+			resp, err = client.Do(req)
+		}
 	default:
 		return resp, err
 	}
@@ -138,7 +147,7 @@ func (httpSender *HttpSender) GetScrollDisplay() *container.Scroll {
 }
 
 func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
-	resp := widget.NewSelect([]string{"GET", "POST", "DELETE"}, func(value string) {
+	resp := widget.NewSelect([]string{"GET", "POST", "DELETE", "PUT"}, func(value string) {
 		httpSender.Method = value
 	})
 	resp.PlaceHolder = "Select method"
