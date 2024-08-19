@@ -29,6 +29,7 @@ func main() {
 	}
 	httpSender.Repeat = 1
 	httpSender.Delay = 200
+	httpSender.Params.MultiLine = true
 	httpSender.Params.SetPlaceHolder("Enter parameters by JSON")
 	httpSender.SendBtn = httpSender.SendBtnHandler()
 	httpSender.Input.SetPlaceHolder("Enter the address bar for the request")
@@ -40,37 +41,51 @@ func main() {
 
 	content := container.NewGridWithColumns(
 		1,
-		container.NewGridWithRows(
-			1,
+		container.NewBorder(
 			httpSender.Input,
+			nil,
+			nil,
+			nil,
+			httpSender.Params,
 		),
 		container.NewGridWithRows(
 			3,
-			httpSender.Params,
-			container.NewGridWithColumns(
-				3,
-				httpSender.GetSelectMethod(),
-				httpSender.DelayEntry,
-				httpSender.RepeatEntry,
+			container.NewBorder(
+				nil,
+				nil,
+				nil,
+				nil,
+				container.NewGridWithColumns(
+					2,
+					httpSender.RepeatEntry,
+					httpSender.DelayEntry,
+				),
 			),
-			container.NewGridWithColumns(
-				3,
-				httpSender.SendBtn,
+			container.NewBorder(
+				nil,
+				nil,
+				nil,
+				nil,
+				container.NewGridWithColumns(
+					2,
+					httpSender.GetSelectMethod(),
+					httpSender.SendBtn,
+				),
+			),
+			httpSender.DisplayRepeat,
+		),
+		container.NewBorder(
+			nil,
+			nil,
+			nil,
+			container.NewBorder(
 				httpSender.ClearResultBtn,
-				httpSender.DisplayRepeat,
+				btnExit,
+				nil,
+				nil,
+				httpSender.CopyBtn,
 			),
-		),
-		container.NewGridWithRows(
-			1,
 			httpSender.ScrollContainer,
-		),
-		container.NewGridWithRows(
-			1,
-			httpSender.CopyBtn,
-		),
-		container.NewGridWithColumns(
-			1,
-			btnExit,
 		),
 	)
 	window.SetContent(content)
