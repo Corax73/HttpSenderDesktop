@@ -27,8 +27,7 @@ func main() {
 		DelayEntry:    widget.NewEntry(),
 		DisplayRepeat: widget.NewLabel("Repeat №"),
 	}
-	httpSender.Repeat = 1
-	httpSender.Delay = 200
+	httpSender.ResetState()
 	httpSender.Params.MultiLine = true
 	httpSender.Params.SetPlaceHolder("Enter parameters by JSON")
 	httpSender.SendBtn = httpSender.SendBtnHandler()
@@ -38,6 +37,8 @@ func main() {
 	httpSender.ScrollContainer = httpSender.GetScrollDisplay()
 	httpSender.ClearResultBtn = httpSender.ClearResultBtnHandler()
 	httpSender.CopyBtn = httpSender.CopyBtnHandler()
+	httpSender.SelectMethod = httpSender.GetSelectMethod()
+	httpSender.ClearParametersBtn = httpSender.ClearParametersBtnHandler()
 
 	content := container.NewGridWithColumns(
 		1,
@@ -67,9 +68,10 @@ func main() {
 				nil,
 				nil,
 				container.NewGridWithColumns(
-					2,
-					httpSender.GetSelectMethod(),
+					3,
+					httpSender.SelectMethod,
 					httpSender.SendBtn,
+					httpSender.ClearParametersBtn,
 				),
 			),
 			httpSender.DisplayRepeat,

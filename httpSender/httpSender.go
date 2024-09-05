@@ -22,12 +22,18 @@ type State struct {
 	Repeat, Delay int
 }
 
+func (state *State) ResetState() {
+	state.Method = ""
+	state.Repeat, state.Delay = 1, 200
+}
+
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry *widget.Entry
-	ScrollContainer                                 *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn                *widget.Button
-	DisplayRepeat                                   *widget.Label
+	Input, Display, Params, RepeatEntry, DelayEntry      *widget.Entry
+	ScrollContainer                                      *container.Scroll
+	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn *widget.Button
+	DisplayRepeat                                        *widget.Label
+	SelectMethod                                         *widget.Select
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
@@ -74,9 +80,6 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 	case "POST":
 		responseBody := httpSender.getParams()
 		resp, err = http.Post(httpSender.Input.Text, "application/json", responseBody)
-		if err != nil {
-			httpSender.showResp(err.Error(), repetitionNumberStub)
-		}
 	case "DELETE":
 		client := &http.Client{}
 		var req *http.Request
@@ -200,5 +203,16 @@ func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
 			httpSender.showResp(err.Error(), repetitionNumberStub)
 		}
 		clipboard.Write(clipboard.FmtText, []byte(httpSender.Display.Text))
+	})
+}
+
+func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
+	return widget.NewButton("Clear all parameters", func() {
+		httpSender.Input.SetText("")
+		httpSender.Params.SetText("")
+		httpSender.RepeatEntry.SetText("")
+		httpSender.DelayEntry.SetText("")
+		httpSender.SelectMethod.Selected = "Select method"
+		httpSender.ResetState()
 	})
 }
