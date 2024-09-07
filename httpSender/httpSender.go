@@ -11,7 +11,9 @@ import (
 
 	"golang.design/x/clipboard"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -29,11 +31,11 @@ func (state *State) ResetState() {
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry      *widget.Entry
-	ScrollContainer                                      *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn *widget.Button
-	DisplayRepeat                                        *widget.Label
-	SelectMethod                                         *widget.Select
+	Input, Display, Params, RepeatEntry, DelayEntry                  *widget.Entry
+	ScrollContainer                                                  *container.Scroll
+	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn *widget.Button
+	DisplayRepeat                                                    *widget.Label
+	SelectMethod                                                     *widget.Select
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
@@ -214,5 +216,18 @@ func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
 		httpSender.DelayEntry.SetText("")
 		httpSender.SelectMethod.Selected = "Select method"
 		httpSender.ResetState()
+	})
+}
+
+func (httpSender *HttpSender) SaveResultBtnHandler(appWindow fyne.Window) *widget.Button {
+	return widget.NewButton("Save result to file", func() {
+		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err == nil && writer != nil {
+				_, err := writer.Write([]byte(httpSender.Display.Text))
+				if err != nil {
+					dialog.ShowError(err, appWindow)
+				}
+			}
+		}, appWindow)
 	})
 }

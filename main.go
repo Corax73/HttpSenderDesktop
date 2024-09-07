@@ -39,6 +39,7 @@ func main() {
 	httpSender.CopyBtn = httpSender.CopyBtnHandler()
 	httpSender.SelectMethod = httpSender.GetSelectMethod()
 	httpSender.ClearParametersBtn = httpSender.ClearParametersBtnHandler()
+	httpSender.SaveResultBtn = httpSender.SaveResultBtnHandler(window)
 
 	content := container.NewGridWithColumns(
 		1,
@@ -78,11 +79,11 @@ func main() {
 		),
 		container.NewBorder(
 			nil,
-			nil,
+			btnExit,
 			nil,
 			container.NewBorder(
 				httpSender.ClearResultBtn,
-				btnExit,
+				httpSender.SaveResultBtn,
 				nil,
 				nil,
 				httpSender.CopyBtn,
