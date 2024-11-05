@@ -40,6 +40,7 @@ func main() {
 	httpSender.SelectMethod = httpSender.GetSelectMethod()
 	httpSender.ClearParametersBtn = httpSender.ClearParametersBtnHandler()
 	httpSender.SaveResultBtn = httpSender.SaveResultBtnHandler(window)
+	httpSender.NotShowResultCheckbox = httpSender.NotShowResultCheckboxHandler()
 
 	content := container.NewGridWithColumns(
 		1,
@@ -75,7 +76,11 @@ func main() {
 					httpSender.ClearParametersBtn,
 				),
 			),
-			httpSender.DisplayRepeat,
+			container.NewGridWithColumns(
+				2,
+				httpSender.DisplayRepeat,
+				httpSender.NotShowResultCheckbox,
+			),
 		),
 		container.NewBorder(
 			nil,

@@ -22,20 +22,23 @@ const repetitionNumberStub = 0
 type State struct {
 	Method        string
 	Repeat, Delay int
+	NotShowResult bool
 }
 
 func (state *State) ResetState() {
 	state.Method = ""
 	state.Repeat, state.Delay = 1, 200
+	state.NotShowResult = false
 }
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry                  *widget.Entry
-	ScrollContainer                                                  *container.Scroll
+	Input, Display, Params, RepeatEntry, DelayEntry                     *widget.Entry
+	ScrollContainer                                                     *container.Scroll
 	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn *widget.Button
-	DisplayRepeat                                                    *widget.Label
-	SelectMethod                                                     *widget.Select
+	DisplayRepeat                                                       *widget.Label
+	SelectMethod                                                        *widget.Select
+	NotShowResultCheckbox                                               *widget.Check
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
@@ -44,17 +47,19 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			httpSender.getRepeat()
 			httpSender.Display.SetText("")
 			for i := 0; i < httpSender.Repeat; i++ {
-				httpSender.showRepeat(i + 1)
+				httpSender.showRepeat(i+1, false)
 				resp, err := httpSender.SendByMethod()
 				if err == nil {
 					body, err := io.ReadAll(resp.Body)
 					if err == nil {
 						defer resp.Body.Close()
 						var prettyJSON bytes.Buffer
-						if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
-							httpSender.showResp(prettyJSON.String(), i+1)
-						} else {
-							httpSender.showResp(err.Error(), i+1)
+						if !httpSender.NotShowResult {
+							if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
+								httpSender.showResp(prettyJSON.String(), i+1)
+							} else {
+								httpSender.showResp(err.Error(), i+1)
+							}
 						}
 					} else {
 						httpSender.showResp(err.Error(), i+1)
@@ -67,6 +72,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 					time.Sleep(time.Duration(httpSender.Delay) * time.Millisecond)
 				}
 			}
+			httpSender.showRepeat(1, true)
 		} else {
 			httpSender.showResp("Enter the request string", repetitionNumberStub)
 		}
@@ -136,10 +142,15 @@ func (httpSender *HttpSender) showResp(data string, repeatNumber int) {
 	}
 }
 
-func (httpSender *HttpSender) showRepeat(repeatNumber int) {
+func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool) {
 	var strBuilder strings.Builder
-	strBuilder.WriteString("Repeat №")
-	strBuilder.WriteString(strconv.Itoa(repeatNumber))
+	if !isEnd {
+		strBuilder.WriteString("Repeat №")
+		strBuilder.WriteString(strconv.Itoa(repeatNumber))
+	} else {
+		strBuilder.WriteString(httpSender.DisplayRepeat.Text)
+		strBuilder.WriteString(" All repetitions completed!")
+	}
 	httpSender.DisplayRepeat.SetText(strBuilder.String())
 	strBuilder.Reset()
 }
@@ -229,5 +240,11 @@ func (httpSender *HttpSender) SaveResultBtnHandler(appWindow fyne.Window) *widge
 				}
 			}
 		}, appWindow)
+	})
+}
+
+func (httpSender *HttpSender) NotShowResultCheckboxHandler() *widget.Check {
+	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
+		httpSender.NotShowResult = value
 	})
 }
