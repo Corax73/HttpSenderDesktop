@@ -20,25 +20,26 @@ import (
 const repetitionNumberStub = 0
 
 type State struct {
-	Method        string
-	Repeat, Delay int
-	NotShowResult bool
+	Method, BasicAuthUsername, BasicAuthPassword string
+	Repeat, Delay                                int
+	NotShowResult                                bool
 }
 
 func (state *State) ResetState() {
-	state.Method = ""
+	state.Method, state.BasicAuthUsername, state.BasicAuthPassword = "", "", ""
 	state.Repeat, state.Delay = 1, 200
 	state.NotShowResult = false
 }
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry                     *widget.Entry
-	ScrollContainer                                                     *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn *widget.Button
-	DisplayRepeat                                                       *widget.Label
-	SelectMethod                                                        *widget.Select
-	NotShowResultCheckbox                                               *widget.Check
+	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry *widget.Entry
+	ScrollContainer                                                                                 *container.Scroll
+	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn            *widget.Button
+	DisplayRepeat                                                                                   *widget.Label
+	SelectMethod                                                                                    *widget.Select
+	NotShowResultCheckbox                                                                           *widget.Check
+	BasicAuthForm                                                                                   *widget.Form
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
@@ -80,28 +81,51 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 }
 
 func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
+	var req *http.Request
 	var resp *http.Response
 	var err error
+	client := &http.Client{
+		Transport: &http.Transport{},
+	}
 	switch httpSender.Method {
 	case "GET":
-		resp, err = http.Get(httpSender.Input.Text)
+		req, err = http.NewRequest(http.MethodGet, httpSender.Input.Text, nil)
+		if err == nil {
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
+			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
+				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
+			}
+			resp, err = client.Do(req)
+		}
 	case "POST":
-		responseBody := httpSender.getParams()
-		resp, err = http.Post(httpSender.Input.Text, "application/json", responseBody)
+		req, err = http.NewRequest(http.MethodPost, httpSender.Input.Text, httpSender.getParams())
+		if err == nil {
+			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
+			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
+				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
+			}
+			resp, err = client.Do(req)
+		}
 	case "DELETE":
-		client := &http.Client{}
 		var req *http.Request
 		req, err = http.NewRequest(http.MethodDelete, httpSender.Input.Text, nil)
 		if err == nil {
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
+			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
+				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
+			}
 			resp, err = client.Do(req)
 		}
 	case "PUT":
 		responseBody := httpSender.getParams()
-		client := &http.Client{}
-		var req *http.Request
 		req, err = http.NewRequest(http.MethodPut, httpSender.Input.Text, responseBody)
-		req.Header.Set("Content-Type", "application/json")
 		if err == nil {
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
+			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
+				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
+			}
 			resp, err = client.Do(req)
 		}
 	default:
@@ -226,6 +250,9 @@ func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
 		httpSender.RepeatEntry.SetText("")
 		httpSender.DelayEntry.SetText("")
 		httpSender.SelectMethod.Selected = "Select method"
+		httpSender.SelectMethod.Refresh()
+		httpSender.BasicAuthUsernameEntry.SetText("")
+		httpSender.BasicAuthPasswordEntry.SetText("")
 		httpSender.ResetState()
 	})
 }
@@ -246,5 +273,34 @@ func (httpSender *HttpSender) SaveResultBtnHandler(appWindow fyne.Window) *widge
 func (httpSender *HttpSender) NotShowResultCheckboxHandler() *widget.Check {
 	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
 		httpSender.NotShowResult = value
+	})
+}
+
+func (httpSender *HttpSender) SetBasicAuthBtnHandler(appWindow fyne.Window) *widget.Button {
+	basicAuthFormSlice := []*widget.FormItem{
+		widget.NewFormItem("Username", httpSender.BasicAuthUsernameEntry),
+		widget.NewFormItem("Password", httpSender.BasicAuthPasswordEntry),
+	}
+	onSubmitFunc := func(result bool) {
+		if result && httpSender.BasicAuthUsernameEntry.Text != "" && httpSender.BasicAuthPasswordEntry.Text != "" {
+			httpSender.BasicAuthUsername = httpSender.BasicAuthUsernameEntry.Text
+			httpSender.BasicAuthPassword = httpSender.BasicAuthPasswordEntry.Text
+		} else {
+			httpSender.BasicAuthUsername,
+				httpSender.BasicAuthPassword,
+				httpSender.BasicAuthUsernameEntry.Text,
+				httpSender.BasicAuthPasswordEntry.Text =
+				"", "", "", ""
+		}
+	}
+	return widget.NewButton("Set basic auth", func() {
+		dialog.ShowForm(
+			"Set username and password for basic auth",
+			"Apply",
+			"Cancel",
+			basicAuthFormSlice,
+			onSubmitFunc,
+			appWindow,
+		)
 	})
 }

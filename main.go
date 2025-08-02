@@ -20,12 +20,14 @@ func main() {
 	})
 
 	httpSender := httpSender.HttpSender{
-		Input:         widget.NewEntry(),
-		Display:       widget.NewEntry(),
-		Params:        widget.NewEntry(),
-		RepeatEntry:   widget.NewEntry(),
-		DelayEntry:    widget.NewEntry(),
-		DisplayRepeat: widget.NewLabel("Repeat №"),
+		Input:                  widget.NewEntry(),
+		Display:                widget.NewEntry(),
+		Params:                 widget.NewEntry(),
+		RepeatEntry:            widget.NewEntry(),
+		DelayEntry:             widget.NewEntry(),
+		DisplayRepeat:          widget.NewLabel("Repeat №"),
+		BasicAuthUsernameEntry: widget.NewEntry(),
+		BasicAuthPasswordEntry: widget.NewPasswordEntry(),
 	}
 	httpSender.ResetState()
 	httpSender.Params.MultiLine = true
@@ -41,6 +43,7 @@ func main() {
 	httpSender.ClearParametersBtn = httpSender.ClearParametersBtnHandler()
 	httpSender.SaveResultBtn = httpSender.SaveResultBtnHandler(window)
 	httpSender.NotShowResultCheckbox = httpSender.NotShowResultCheckboxHandler()
+	httpSender.SetBasicAuthBtn = httpSender.SetBasicAuthBtnHandler(window)
 
 	content := container.NewGridWithColumns(
 		1,
@@ -70,8 +73,9 @@ func main() {
 				nil,
 				nil,
 				container.NewGridWithColumns(
-					3,
+					4,
 					httpSender.SelectMethod,
+					httpSender.SetBasicAuthBtn,
 					httpSender.SendBtn,
 					httpSender.ClearParametersBtn,
 				),
