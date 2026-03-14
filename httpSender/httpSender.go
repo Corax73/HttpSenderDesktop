@@ -20,26 +20,27 @@ import (
 const repetitionNumberStub = 0
 
 type State struct {
-	Method, BasicAuthUsername, BasicAuthPassword string
-	Repeat, Delay                                int
-	NotShowResult                                bool
+	Method, BasicAuthUsername, BasicAuthPassword, CookieName, CookieValue string
+	Repeat, Delay, CookieExpiration                                       int
+	NotShowResult                                                         bool
 }
 
 func (state *State) ResetState() {
-	state.Method, state.BasicAuthUsername, state.BasicAuthPassword = "", "", ""
-	state.Repeat, state.Delay = 1, 200
+	state.Method, state.BasicAuthUsername, state.BasicAuthPassword, state.CookieName, state.CookieValue = "", "", "", "", ""
+	state.Repeat, state.Delay, state.CookieExpiration = 1, 200, 1
 	state.NotShowResult = false
 }
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry *widget.Entry
-	ScrollContainer                                                                                 *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn            *widget.Button
-	DisplayRepeat                                                                                   *widget.Label
-	SelectMethod                                                                                    *widget.Select
-	NotShowResultCheckbox                                                                           *widget.Check
-	BasicAuthForm                                                                                   *widget.Form
+	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry,
+	BasicAuthPasswordEntry, CookieNameEntry, CookieValueEntry, CookieExpirationEntry *widget.Entry
+	ScrollContainer                                                                                    *container.Scroll
+	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn *widget.Button
+	DisplayRepeat                                                                                      *widget.Label
+	SelectMethod                                                                                       *widget.Select
+	NotShowResultCheckbox                                                                              *widget.Check
+	BasicAuthForm                                                                                      *widget.Form
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
@@ -95,6 +96,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
+			httpSender.setCookie(req)
 			resp, err = client.Do(req)
 		}
 	case "POST":
@@ -105,6 +107,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
+			httpSender.setCookie(req)
 			resp, err = client.Do(req)
 		}
 	case "DELETE":
@@ -115,6 +118,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
+			httpSender.setCookie(req)
 			resp, err = client.Do(req)
 		}
 	case "PUT":
@@ -126,6 +130,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
+			httpSender.setCookie(req)
 			resp, err = client.Do(req)
 		}
 	default:
@@ -299,6 +304,59 @@ func (httpSender *HttpSender) SetBasicAuthBtnHandler(appWindow fyne.Window) *wid
 			"Apply",
 			"Cancel",
 			basicAuthFormSlice,
+			onSubmitFunc,
+			appWindow,
+		)
+	})
+}
+
+func (httpSender *HttpSender) setCookie(req *http.Request) {
+	if httpSender.CookieName != "" && httpSender.CookieValue != "" {
+		expiration := time.Now().Add(time.Duration(httpSender.CookieExpiration) * time.Hour)
+		cookie := http.Cookie{
+			Name:     httpSender.CookieName,
+			Value:    httpSender.CookieValue,
+			Expires:  expiration,
+			Path:     "/",
+			HttpOnly: true,
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+		}
+		req.AddCookie(&cookie)
+	}
+}
+
+func (httpSender *HttpSender) SetCookieBtnHandler(appWindow fyne.Window) *widget.Button {
+	cookieFormSlice := []*widget.FormItem{
+		widget.NewFormItem("Cookie name", httpSender.CookieNameEntry),
+		widget.NewFormItem("Cookie value", httpSender.CookieValueEntry),
+		widget.NewFormItem("Cookie expiration", httpSender.CookieExpirationEntry),
+	}
+	onSubmitFunc := func(result bool) {
+		if result && httpSender.CookieNameEntry.Text != "" && httpSender.CookieValueEntry.Text != "" {
+			httpSender.CookieName = httpSender.CookieNameEntry.Text
+			httpSender.CookieValue = httpSender.CookieValueEntry.Text
+		} else {
+			httpSender.CookieName,
+				httpSender.CookieValue,
+				httpSender.CookieNameEntry.Text,
+				httpSender.CookieValueEntry.Text =
+				"", "", "", ""
+		}
+
+		if httpSender.CookieExpirationEntry.Text != "" {
+			number, err := strconv.Atoi(httpSender.CookieExpirationEntry.Text)
+			if err == nil && number > 0 {
+				httpSender.CookieExpiration = number
+			}
+		}
+	}
+	return widget.NewButton("Set cookie", func() {
+		dialog.ShowForm(
+			"Set name, value and expiration time for cookie",
+			"Apply",
+			"Cancel",
+			cookieFormSlice,
 			onSubmitFunc,
 			appWindow,
 		)

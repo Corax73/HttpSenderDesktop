@@ -28,6 +28,9 @@ func main() {
 		DisplayRepeat:          widget.NewLabel("Repeat №"),
 		BasicAuthUsernameEntry: widget.NewEntry(),
 		BasicAuthPasswordEntry: widget.NewPasswordEntry(),
+		CookieNameEntry:        widget.NewEntry(),
+		CookieValueEntry:       widget.NewEntry(),
+		CookieExpirationEntry:  widget.NewEntry(),
 	}
 	httpSender.ResetState()
 	httpSender.Params.MultiLine = true
@@ -44,6 +47,7 @@ func main() {
 	httpSender.SaveResultBtn = httpSender.SaveResultBtnHandler(window)
 	httpSender.NotShowResultCheckbox = httpSender.NotShowResultCheckboxHandler()
 	httpSender.SetBasicAuthBtn = httpSender.SetBasicAuthBtnHandler(window)
+	httpSender.SetCookieBtn = httpSender.SetCookieBtnHandler(window)
 
 	content := container.NewGridWithColumns(
 		1,
@@ -73,9 +77,10 @@ func main() {
 				nil,
 				nil,
 				container.NewGridWithColumns(
-					4,
+					5,
 					httpSender.SelectMethod,
 					httpSender.SetBasicAuthBtn,
+					httpSender.SetCookieBtn,
 					httpSender.SendBtn,
 					httpSender.ClearParametersBtn,
 				),
