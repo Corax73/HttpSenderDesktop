@@ -49,6 +49,8 @@ func main() {
 	httpSender.SetBasicAuthBtn = httpSender.SetBasicAuthBtnHandler(window)
 	httpSender.SetCookieBtn = httpSender.SetCookieBtnHandler(window)
 
+	showDialogButton := httpSender.SetDynamicCookieFormBtnHandler(window)
+
 	content := container.NewGridWithColumns(
 		1,
 		container.NewBorder(
@@ -77,12 +79,13 @@ func main() {
 				nil,
 				nil,
 				container.NewGridWithColumns(
-					5,
+					6,
 					httpSender.SelectMethod,
 					httpSender.SetBasicAuthBtn,
 					httpSender.SetCookieBtn,
 					httpSender.SendBtn,
 					httpSender.ClearParametersBtn,
+					showDialogButton,
 				),
 			),
 			container.NewGridWithColumns(

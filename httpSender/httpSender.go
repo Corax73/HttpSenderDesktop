@@ -3,6 +3,7 @@ package httpSender
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
@@ -361,4 +363,64 @@ func (httpSender *HttpSender) SetCookieBtnHandler(appWindow fyne.Window) *widget
 			appWindow,
 		)
 	})
+}
+
+func (httpSender *HttpSender) SetDynamicCookieFormBtnHandler(appWindow fyne.Window) *widget.Button {
+	return widget.NewButton("Set cookies", func() {
+		httpSender.showDynamicCookieFormDialog(appWindow)
+	})
+}
+
+type CookieInstance struct {
+	CookieName, CookieValue, CookieExpiration binding.String
+}
+
+func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window) *widget.Button {
+	myForm := widget.NewForm()
+	var cookies []*CookieInstance
+	newCookie := CookieInstance{binding.NewString(), binding.NewString(), binding.NewString()}
+	cookies = append(cookies, &newCookie)
+
+	myForm.Append("Cookie name", widget.NewEntryWithData(newCookie.CookieName))
+	myForm.Append("Cookie value", widget.NewEntryWithData(newCookie.CookieValue))
+	myForm.Append("Cookie expiration", widget.NewEntryWithData(newCookie.CookieExpiration))
+
+	addButton := widget.NewButton("Add new field", func() {
+		newCookie := CookieInstance{binding.NewString(), binding.NewString(), binding.NewString()}
+		cookies = append(cookies, &newCookie)
+		myForm.Append("Cookie name", widget.NewEntryWithData(newCookie.CookieName))
+		myForm.Append("Cookie value", widget.NewEntryWithData(newCookie.CookieValue))
+		myForm.Append("Cookie expiration", widget.NewEntryWithData(newCookie.CookieExpiration))
+		myForm.Refresh()
+	})
+
+	dialogContent := container.NewVBox(
+		myForm,
+		addButton,
+	)
+
+	dlg := dialog.NewCustomConfirm(
+		"Set name, value and expiration time for cookies",
+		"Submit",
+		"Cancel",
+		dialogContent,
+		func(ok bool) {
+			if ok {
+				fmt.Println("Form submitted. Values:")
+				for i, entry := range cookies {
+					name, _ := entry.CookieName.Get()
+					value, _ := entry.CookieValue.Get()
+					expiration, _ := entry.CookieExpiration.Get()
+					fmt.Printf("Entry %d: name %s value %s expiration %s\n", i+1, name, value, expiration)
+				}
+			} else {
+				fmt.Println("Dialog cancelled")
+			}
+		},
+		appWindow,
+	)
+
+	dlg.Resize(fyne.NewSize(300, 250))
+	dlg.Show()
+	return addButton
 }
