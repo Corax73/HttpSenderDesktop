@@ -3,9 +3,9 @@ package httpSender
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -14,7 +14,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/data/binding"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
@@ -22,21 +21,27 @@ import (
 const repetitionNumberStub = 0
 
 type State struct {
-	Method, BasicAuthUsername, BasicAuthPassword, CookieName, CookieValue string
-	Repeat, Delay, CookieExpiration                                       int
-	NotShowResult                                                         bool
+	Method, BasicAuthUsername, BasicAuthPassword string
+	Repeat, Delay, CookieDefaultExpiration       int
+	NotShowResult                                bool
+	Cookies                                      []*CookieInstance
 }
 
 func (state *State) ResetState() {
-	state.Method, state.BasicAuthUsername, state.BasicAuthPassword, state.CookieName, state.CookieValue = "", "", "", "", ""
-	state.Repeat, state.Delay, state.CookieExpiration = 1, 200, 1
+	state.Method, state.BasicAuthUsername, state.BasicAuthPassword = "", "", ""
+	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
 	state.NotShowResult = false
+	state.Cookies = make([]*CookieInstance, 0)
+
+}
+
+type CookieInstance struct {
+	CookieName, CookieValue, CookieExpiration *widget.Entry
 }
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry,
-	BasicAuthPasswordEntry, CookieNameEntry, CookieValueEntry, CookieExpirationEntry *widget.Entry
+	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry    *widget.Entry
 	ScrollContainer                                                                                    *container.Scroll
 	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn *widget.Button
 	DisplayRepeat                                                                                      *widget.Label
@@ -98,7 +103,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	case "POST":
@@ -109,7 +114,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	case "DELETE":
@@ -120,7 +125,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	case "PUT":
@@ -132,7 +137,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	default:
@@ -312,57 +317,32 @@ func (httpSender *HttpSender) SetBasicAuthBtnHandler(appWindow fyne.Window) *wid
 	})
 }
 
-func (httpSender *HttpSender) setCookie(req *http.Request) {
-	if httpSender.CookieName != "" && httpSender.CookieValue != "" {
-		expiration := time.Now().Add(time.Duration(httpSender.CookieExpiration) * time.Hour)
-		cookie := http.Cookie{
-			Name:     httpSender.CookieName,
-			Value:    httpSender.CookieValue,
-			Expires:  expiration,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
-		}
-		req.AddCookie(&cookie)
-	}
-}
-
-func (httpSender *HttpSender) SetCookieBtnHandler(appWindow fyne.Window) *widget.Button {
-	cookieFormSlice := []*widget.FormItem{
-		widget.NewFormItem("Cookie name", httpSender.CookieNameEntry),
-		widget.NewFormItem("Cookie value", httpSender.CookieValueEntry),
-		widget.NewFormItem("Cookie expiration", httpSender.CookieExpirationEntry),
-	}
-	onSubmitFunc := func(result bool) {
-		if result && httpSender.CookieNameEntry.Text != "" && httpSender.CookieValueEntry.Text != "" {
-			httpSender.CookieName = httpSender.CookieNameEntry.Text
-			httpSender.CookieValue = httpSender.CookieValueEntry.Text
-		} else {
-			httpSender.CookieName,
-				httpSender.CookieValue,
-				httpSender.CookieNameEntry.Text,
-				httpSender.CookieValueEntry.Text =
-				"", "", "", ""
-		}
-
-		if httpSender.CookieExpirationEntry.Text != "" {
-			number, err := strconv.Atoi(httpSender.CookieExpirationEntry.Text)
-			if err == nil && number > 0 {
-				httpSender.CookieExpiration = number
+// https://httpbin.org/get
+func (httpSender *HttpSender) setCookies(req *http.Request) {
+	for i, cookie := range httpSender.Cookies {
+		name := cookie.CookieName.Text
+		value := cookie.CookieValue.Text
+		if name != "" && value != "" {
+			expirationStr := cookie.CookieExpiration.Text
+			expirationInt, err := strconv.Atoi(expirationStr)
+			if err != nil || expirationInt <= 0 {
+				expirationInt = httpSender.CookieDefaultExpiration
 			}
+			expiration := time.Now().Add(time.Duration(expirationInt) * time.Hour)
+			cookie := http.Cookie{
+				Name:     name,
+				Value:    value,
+				Expires:  expiration,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			}
+			req.AddCookie(&cookie)
+		} else {
+			httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
 		}
 	}
-	return widget.NewButton("Set cookie", func() {
-		dialog.ShowForm(
-			"Set name, value and expiration time for cookie",
-			"Apply",
-			"Cancel",
-			cookieFormSlice,
-			onSubmitFunc,
-			appWindow,
-		)
-	})
 }
 
 func (httpSender *HttpSender) SetDynamicCookieFormBtnHandler(appWindow fyne.Window) *widget.Button {
@@ -371,31 +351,26 @@ func (httpSender *HttpSender) SetDynamicCookieFormBtnHandler(appWindow fyne.Wind
 	})
 }
 
-type CookieInstance struct {
-	CookieName, CookieValue, CookieExpiration binding.String
-}
-
 func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window) *widget.Button {
-	myForm := widget.NewForm()
-	var cookies []*CookieInstance
-	newCookie := CookieInstance{binding.NewString(), binding.NewString(), binding.NewString()}
-	cookies = append(cookies, &newCookie)
+	cookieForm := widget.NewForm()
+	newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
+	httpSender.Cookies = append(httpSender.Cookies, &newCookie)
 
-	myForm.Append("Cookie name", widget.NewEntryWithData(newCookie.CookieName))
-	myForm.Append("Cookie value", widget.NewEntryWithData(newCookie.CookieValue))
-	myForm.Append("Cookie expiration", widget.NewEntryWithData(newCookie.CookieExpiration))
+	cookieForm.Append("Cookie name", newCookie.CookieName)
+	cookieForm.Append("Cookie value", newCookie.CookieValue)
+	cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
 
 	addButton := widget.NewButton("Add new field", func() {
-		newCookie := CookieInstance{binding.NewString(), binding.NewString(), binding.NewString()}
-		cookies = append(cookies, &newCookie)
-		myForm.Append("Cookie name", widget.NewEntryWithData(newCookie.CookieName))
-		myForm.Append("Cookie value", widget.NewEntryWithData(newCookie.CookieValue))
-		myForm.Append("Cookie expiration", widget.NewEntryWithData(newCookie.CookieExpiration))
-		myForm.Refresh()
+		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
+		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
+		cookieForm.Append("Cookie name", newCookie.CookieName)
+		cookieForm.Append("Cookie value", newCookie.CookieValue)
+		cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
+		cookieForm.Refresh()
 	})
 
 	dialogContent := container.NewVBox(
-		myForm,
+		cookieForm,
 		addButton,
 	)
 
@@ -406,15 +381,15 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 		dialogContent,
 		func(ok bool) {
 			if ok {
-				fmt.Println("Form submitted. Values:")
-				for i, entry := range cookies {
-					name, _ := entry.CookieName.Get()
-					value, _ := entry.CookieValue.Get()
-					expiration, _ := entry.CookieExpiration.Get()
-					fmt.Printf("Entry %d: name %s value %s expiration %s\n", i+1, name, value, expiration)
+				for i, cookie := range httpSender.Cookies {
+					name := cookie.CookieName.Text
+					value := cookie.CookieValue.Text
+					if name == "" || value == "" {
+						httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
+					}
 				}
 			} else {
-				fmt.Println("Dialog cancelled")
+				httpSender.Cookies = make([]*CookieInstance, 5)
 			}
 		},
 		appWindow,
