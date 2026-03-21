@@ -317,7 +317,6 @@ func (httpSender *HttpSender) SetBasicAuthBtnHandler(appWindow fyne.Window) *wid
 	})
 }
 
-// https://httpbin.org/get
 func (httpSender *HttpSender) setCookies(req *http.Request) {
 	for i, cookie := range httpSender.Cookies {
 		name := cookie.CookieName.Text
@@ -353,14 +352,21 @@ func (httpSender *HttpSender) SetDynamicCookieFormBtnHandler(appWindow fyne.Wind
 
 func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window) *widget.Button {
 	cookieForm := widget.NewForm()
-	newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
-	httpSender.Cookies = append(httpSender.Cookies, &newCookie)
+	if len(httpSender.Cookies) == 0 {
+		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
+		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
 
-	cookieForm.Append("Cookie name", newCookie.CookieName)
-	cookieForm.Append("Cookie value", newCookie.CookieValue)
-	cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
-
-	addButton := widget.NewButton("Add new field", func() {
+		cookieForm.Append("Cookie name", newCookie.CookieName)
+		cookieForm.Append("Cookie value", newCookie.CookieValue)
+		cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
+	} else {
+		for _, cookie := range httpSender.Cookies {
+			cookieForm.Append("Cookie name", cookie.CookieName)
+			cookieForm.Append("Cookie value", cookie.CookieValue)
+			cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
+		}
+	}
+	addButton := widget.NewButton("Add new cookie", func() {
 		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
 		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
 		cookieForm.Append("Cookie name", newCookie.CookieName)
@@ -389,7 +395,7 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 					}
 				}
 			} else {
-				httpSender.Cookies = make([]*CookieInstance, 5)
+				httpSender.Cookies = make([]*CookieInstance, 0)
 			}
 		},
 		appWindow,
