@@ -355,25 +355,14 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 	if len(httpSender.Cookies) == 0 {
 		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
 		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
-
-		cookieForm.Append("Cookie name", newCookie.CookieName)
-		cookieForm.Append("Cookie value", newCookie.CookieValue)
-		cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
-	} else {
-		for _, cookie := range httpSender.Cookies {
-			cookieForm.Append("Cookie name", cookie.CookieName)
-			cookieForm.Append("Cookie value", cookie.CookieValue)
-			cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
-		}
 	}
-	addButton := widget.NewButton("Add new cookie", func() {
-		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
-		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
-		cookieForm.Append("Cookie name", newCookie.CookieName)
-		cookieForm.Append("Cookie value", newCookie.CookieValue)
-		cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
-		cookieForm.Refresh()
-	})
+	for _, cookie := range httpSender.Cookies {
+		cookieForm.Append("Cookie name", cookie.CookieName)
+		cookieForm.Append("Cookie value", cookie.CookieValue)
+		cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
+		cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(cookie, cookieForm))
+	}
+	addButton := httpSender.newCookieBtnHandler(cookieForm)
 
 	dialogContent := container.NewVBox(
 		cookieForm,
@@ -383,7 +372,7 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 	dlg := dialog.NewCustomConfirm(
 		"Set name, value and expiration time for cookies",
 		"Submit",
-		"Cancel",
+		"Clear all cookies",
 		dialogContent,
 		func(ok bool) {
 			if ok {
@@ -404,4 +393,37 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 	dlg.Resize(fyne.NewSize(300, 250))
 	dlg.Show()
 	return addButton
+}
+
+func (httpSender *HttpSender) newCookieBtnHandler(cookieForm *widget.Form) *widget.Button {
+	return widget.NewButton("Add new cookie", func() {
+		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
+		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
+		cookieForm.Append("Cookie name", newCookie.CookieName)
+		cookieForm.Append("Cookie value", newCookie.CookieValue)
+		cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
+		cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(&newCookie, cookieForm))
+		cookieForm.Refresh()
+	})
+}
+
+func (httpSender *HttpSender) deleteCookieBtnHandler(newCookie *CookieInstance, cookieForm *widget.Form) *widget.Button {
+	return widget.NewButton(
+		"Delete this cookie",
+		func() {
+			for i, cookie := range httpSender.Cookies {
+				if cookie == newCookie {
+					httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
+				}
+			}
+			cookieForm.Items = make([]*widget.FormItem, 0)
+			for _, cookie := range httpSender.Cookies {
+				cookieForm.Append("Cookie name", cookie.CookieName)
+				cookieForm.Append("Cookie value", cookie.CookieValue)
+				cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
+				cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(cookie, cookieForm))
+			}
+			cookieForm.Refresh()
+		},
+	)
 }
