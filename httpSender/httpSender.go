@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -20,21 +21,27 @@ import (
 const repetitionNumberStub = 0
 
 type State struct {
-	Method, BasicAuthUsername, BasicAuthPassword, CookieName, CookieValue string
-	Repeat, Delay, CookieExpiration                                       int
-	NotShowResult                                                         bool
+	Method, BasicAuthUsername, BasicAuthPassword string
+	Repeat, Delay, CookieDefaultExpiration       int
+	NotShowResult                                bool
+	Cookies                                      []*CookieInstance
 }
 
 func (state *State) ResetState() {
-	state.Method, state.BasicAuthUsername, state.BasicAuthPassword, state.CookieName, state.CookieValue = "", "", "", "", ""
-	state.Repeat, state.Delay, state.CookieExpiration = 1, 200, 1
+	state.Method, state.BasicAuthUsername, state.BasicAuthPassword = "", "", ""
+	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
 	state.NotShowResult = false
+	state.Cookies = make([]*CookieInstance, 0)
+
+}
+
+type CookieInstance struct {
+	CookieName, CookieValue, CookieExpiration *widget.Entry
 }
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry,
-	BasicAuthPasswordEntry, CookieNameEntry, CookieValueEntry, CookieExpirationEntry *widget.Entry
+	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry    *widget.Entry
 	ScrollContainer                                                                                    *container.Scroll
 	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn *widget.Button
 	DisplayRepeat                                                                                      *widget.Label
@@ -96,7 +103,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	case "POST":
@@ -107,7 +114,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	case "DELETE":
@@ -118,7 +125,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	case "PUT":
@@ -130,7 +137,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
 				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 			}
-			httpSender.setCookie(req)
+			httpSender.setCookies(req)
 			resp, err = client.Do(req)
 		}
 	default:
@@ -310,55 +317,113 @@ func (httpSender *HttpSender) SetBasicAuthBtnHandler(appWindow fyne.Window) *wid
 	})
 }
 
-func (httpSender *HttpSender) setCookie(req *http.Request) {
-	if httpSender.CookieName != "" && httpSender.CookieValue != "" {
-		expiration := time.Now().Add(time.Duration(httpSender.CookieExpiration) * time.Hour)
-		cookie := http.Cookie{
-			Name:     httpSender.CookieName,
-			Value:    httpSender.CookieValue,
-			Expires:  expiration,
-			Path:     "/",
-			HttpOnly: true,
-			Secure:   true,
-			SameSite: http.SameSiteLaxMode,
+func (httpSender *HttpSender) setCookies(req *http.Request) {
+	for i, cookie := range httpSender.Cookies {
+		name := cookie.CookieName.Text
+		value := cookie.CookieValue.Text
+		if name != "" && value != "" {
+			expirationStr := cookie.CookieExpiration.Text
+			expirationInt, err := strconv.Atoi(expirationStr)
+			if err != nil || expirationInt <= 0 {
+				expirationInt = httpSender.CookieDefaultExpiration
+			}
+			expiration := time.Now().Add(time.Duration(expirationInt) * time.Hour)
+			cookie := http.Cookie{
+				Name:     name,
+				Value:    value,
+				Expires:  expiration,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			}
+			req.AddCookie(&cookie)
+		} else {
+			httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
 		}
-		req.AddCookie(&cookie)
 	}
 }
 
-func (httpSender *HttpSender) SetCookieBtnHandler(appWindow fyne.Window) *widget.Button {
-	cookieFormSlice := []*widget.FormItem{
-		widget.NewFormItem("Cookie name", httpSender.CookieNameEntry),
-		widget.NewFormItem("Cookie value", httpSender.CookieValueEntry),
-		widget.NewFormItem("Cookie expiration", httpSender.CookieExpirationEntry),
-	}
-	onSubmitFunc := func(result bool) {
-		if result && httpSender.CookieNameEntry.Text != "" && httpSender.CookieValueEntry.Text != "" {
-			httpSender.CookieName = httpSender.CookieNameEntry.Text
-			httpSender.CookieValue = httpSender.CookieValueEntry.Text
-		} else {
-			httpSender.CookieName,
-				httpSender.CookieValue,
-				httpSender.CookieNameEntry.Text,
-				httpSender.CookieValueEntry.Text =
-				"", "", "", ""
-		}
-
-		if httpSender.CookieExpirationEntry.Text != "" {
-			number, err := strconv.Atoi(httpSender.CookieExpirationEntry.Text)
-			if err == nil && number > 0 {
-				httpSender.CookieExpiration = number
-			}
-		}
-	}
-	return widget.NewButton("Set cookie", func() {
-		dialog.ShowForm(
-			"Set name, value and expiration time for cookie",
-			"Apply",
-			"Cancel",
-			cookieFormSlice,
-			onSubmitFunc,
-			appWindow,
-		)
+func (httpSender *HttpSender) SetDynamicCookieFormBtnHandler(appWindow fyne.Window) *widget.Button {
+	return widget.NewButton("Set cookies", func() {
+		httpSender.showDynamicCookieFormDialog(appWindow)
 	})
+}
+
+func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window) *widget.Button {
+	cookieForm := widget.NewForm()
+	if len(httpSender.Cookies) == 0 {
+		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
+		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
+	}
+	for _, cookie := range httpSender.Cookies {
+		cookieForm.Append("Cookie name", cookie.CookieName)
+		cookieForm.Append("Cookie value", cookie.CookieValue)
+		cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
+		cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(cookie, cookieForm))
+	}
+	addButton := httpSender.newCookieBtnHandler(cookieForm)
+
+	dialogContent := container.NewVBox(
+		cookieForm,
+		addButton,
+	)
+
+	dlg := dialog.NewCustomConfirm(
+		"Set name, value and expiration time for cookies",
+		"Submit",
+		"Clear all cookies",
+		dialogContent,
+		func(ok bool) {
+			if ok {
+				for i, cookie := range httpSender.Cookies {
+					name := cookie.CookieName.Text
+					value := cookie.CookieValue.Text
+					if name == "" || value == "" {
+						httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
+					}
+				}
+			} else {
+				httpSender.Cookies = make([]*CookieInstance, 0)
+			}
+		},
+		appWindow,
+	)
+
+	dlg.Resize(fyne.NewSize(300, 250))
+	dlg.Show()
+	return addButton
+}
+
+func (httpSender *HttpSender) newCookieBtnHandler(cookieForm *widget.Form) *widget.Button {
+	return widget.NewButton("Add new cookie", func() {
+		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
+		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
+		cookieForm.Append("Cookie name", newCookie.CookieName)
+		cookieForm.Append("Cookie value", newCookie.CookieValue)
+		cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
+		cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(&newCookie, cookieForm))
+		cookieForm.Refresh()
+	})
+}
+
+func (httpSender *HttpSender) deleteCookieBtnHandler(newCookie *CookieInstance, cookieForm *widget.Form) *widget.Button {
+	return widget.NewButton(
+		"Delete this cookie",
+		func() {
+			for i, cookie := range httpSender.Cookies {
+				if cookie == newCookie {
+					httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
+				}
+			}
+			cookieForm.Items = make([]*widget.FormItem, 0)
+			for _, cookie := range httpSender.Cookies {
+				cookieForm.Append("Cookie name", cookie.CookieName)
+				cookieForm.Append("Cookie value", cookie.CookieValue)
+				cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
+				cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(cookie, cookieForm))
+			}
+			cookieForm.Refresh()
+		},
+	)
 }
