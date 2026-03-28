@@ -41,13 +41,13 @@ type CookieInstance struct {
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry    *widget.Entry
-	ScrollContainer                                                                                    *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn *widget.Button
-	DisplayRepeat                                                                                      *widget.Label
-	SelectMethod                                                                                       *widget.Select
-	NotShowResultCheckbox                                                                              *widget.Check
-	BasicAuthForm                                                                                      *widget.Form
+	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry *widget.Entry
+	ScrollContainer                                                                                               *container.Scroll
+	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn            *widget.Button
+	DisplayRepeat                                                                                                 *widget.Label
+	SelectMethod                                                                                                  *widget.Select
+	NotShowResultCheckbox                                                                                         *widget.Check
+	BasicAuthForm                                                                                                 *widget.Form
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
@@ -99,45 +99,27 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 	case "GET":
 		req, err = http.NewRequest(http.MethodGet, httpSender.Input.Text, nil)
 		if err == nil {
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
-			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
-				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
-			}
-			httpSender.setCookies(req)
+			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
 		}
 	case "POST":
 		req, err = http.NewRequest(http.MethodPost, httpSender.Input.Text, httpSender.getParams())
 		if err == nil {
-			req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
-			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
-				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
-			}
-			httpSender.setCookies(req)
+			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
 		}
 	case "DELETE":
 		var req *http.Request
 		req, err = http.NewRequest(http.MethodDelete, httpSender.Input.Text, nil)
 		if err == nil {
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
-			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
-				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
-			}
-			httpSender.setCookies(req)
+			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
 		}
 	case "PUT":
 		responseBody := httpSender.getParams()
 		req, err = http.NewRequest(http.MethodPut, httpSender.Input.Text, responseBody)
 		if err == nil {
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
-			if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
-				req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
-			}
-			httpSender.setCookies(req)
+			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
 		}
 	default:
@@ -207,7 +189,7 @@ func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
 }
 
 func (httpSender *HttpSender) getParams() *bytes.Buffer {
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 	str := httpSender.Params.Text
 	if str == "" {
 		str = "{}"
@@ -265,6 +247,7 @@ func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
 		httpSender.SelectMethod.Refresh()
 		httpSender.BasicAuthUsernameEntry.SetText("")
 		httpSender.BasicAuthPasswordEntry.SetText("")
+		httpSender.HeadersEntry.SetText("")
 		httpSender.ResetState()
 	})
 }
@@ -364,9 +347,11 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 	}
 	addButton := httpSender.newCookieBtnHandler(cookieForm)
 
-	dialogContent := container.NewVBox(
-		cookieForm,
-		addButton,
+	dialogContent := container.NewScroll(
+		container.NewVBox(
+			cookieForm,
+			addButton,
+		),
 	)
 
 	dlg := dialog.NewCustomConfirm(
@@ -390,7 +375,7 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 		appWindow,
 	)
 
-	dlg.Resize(fyne.NewSize(300, 250))
+	dlg.Resize(fyne.NewSize(300, float32((len(httpSender.Cookies)+1)*170)))
 	dlg.Show()
 	return addButton
 }
@@ -426,4 +411,24 @@ func (httpSender *HttpSender) deleteCookieBtnHandler(newCookie *CookieInstance, 
 			cookieForm.Refresh()
 		},
 	)
+}
+
+func (httpSender *HttpSender) setHeadersCookiesAndAuth(req *http.Request) {
+	if httpSender.HeadersEntry.Text == "" {
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
+	} else {
+		headers := make(map[string]string)
+		err := json.Unmarshal([]byte(httpSender.HeadersEntry.Text), &headers)
+		if err != nil {
+			httpSender.showResp(err.Error(), 1)
+		}
+		for k, v := range headers {
+			req.Header.Set(k, v)
+		}
+	}
+	if httpSender.BasicAuthUsername != "" && httpSender.BasicAuthPassword != "" {
+		req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
+	}
+	httpSender.setCookies(req)
 }

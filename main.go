@@ -28,6 +28,7 @@ func main() {
 		DisplayRepeat:          widget.NewLabel("Repeat №"),
 		BasicAuthUsernameEntry: widget.NewEntry(),
 		BasicAuthPasswordEntry: widget.NewPasswordEntry(),
+		HeadersEntry:           widget.NewEntry(),
 	}
 	httpSender.ResetState()
 	httpSender.Params.MultiLine = true
@@ -45,14 +46,15 @@ func main() {
 	httpSender.NotShowResultCheckbox = httpSender.NotShowResultCheckboxHandler()
 	httpSender.SetBasicAuthBtn = httpSender.SetBasicAuthBtnHandler(window)
 	httpSender.SetCookieBtn = httpSender.SetDynamicCookieFormBtnHandler(window)
+	httpSender.HeadersEntry.MultiLine = true
+	httpSender.HeadersEntry.SetPlaceHolder("Enter headers by JSON, default is 'Content-Type', 'application/json'" +
+		" and 'User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'")
 
 	content := container.NewGridWithColumns(
 		1,
-		container.NewBorder(
+		container.NewVBox(
 			httpSender.Input,
-			nil,
-			nil,
-			nil,
+			httpSender.HeadersEntry,
 			httpSender.Params,
 		),
 		container.NewGridWithRows(
@@ -74,7 +76,7 @@ func main() {
 				nil,
 				nil,
 				container.NewGridWithColumns(
-					6,
+					5,
 					httpSender.SelectMethod,
 					httpSender.SetBasicAuthBtn,
 					httpSender.SendBtn,
