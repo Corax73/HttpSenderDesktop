@@ -6,11 +6,14 @@ Libraries used https://github.com/fyne-io/fyne, https://github.com/fyne-io/fyne-
 
 ### Explanations:
 1. The query string is sent as is, with GET parameters.
-2. JSON with parameters
-3. Menu with selection of request method. There is no default value.
+2. JSON with headers.
+3. JSON with parameters.
 4. Delay between requests (with a given repetition).
 5. Number of request repetitions.
-6. Outputting the answer. When repeated, data is added.
+6. Menu with selection of request method. There is no default value.
+7. Setting up a basic authentication login and password.
+8. Setting cookies: name, value, expiration date (in hours).
+9. Outputting the answer. When repeated, data is added.
 
 The buttons also have self-explanatory names.
 
