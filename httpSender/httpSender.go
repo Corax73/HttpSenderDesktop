@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.design/x/clipboard"
@@ -17,8 +18,6 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
-
-const repetitionNumberStub = 0
 
 type State struct {
 	Method, BasicAuthUsername, BasicAuthPassword string
@@ -50,40 +49,63 @@ type HttpSender struct {
 	BasicAuthForm                                                                                                 *widget.Form
 }
 
+type ResponseData struct {
+	DataStr      string
+	RepeatNumber int
+}
+
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 	return widget.NewButton("Send", func() {
 		if httpSender.Input.Text != "" && httpSender.Method != "" {
 			httpSender.getRepeat()
 			httpSender.Display.SetText("")
+			repetitionChans := make([]chan *ResponseData, httpSender.Repeat)
 			for i := 0; i < httpSender.Repeat; i++ {
-				httpSender.showRepeat(i+1, false)
-				resp, err := httpSender.SendByMethod()
-				if err == nil {
-					body, err := io.ReadAll(resp.Body)
+				repetitionChans[i] = make(chan *ResponseData, 1)
+			}
+			var wg sync.WaitGroup
+			for i := 0; i < httpSender.Repeat; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					resp, err := httpSender.SendByMethod()
 					if err == nil {
-						defer resp.Body.Close()
-						var prettyJSON bytes.Buffer
-						if !httpSender.NotShowResult {
-							if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
-								httpSender.showResp(prettyJSON.String(), i+1)
-							} else {
-								httpSender.showResp(err.Error(), i+1)
+						body, err := io.ReadAll(resp.Body)
+						if err == nil {
+							defer resp.Body.Close()
+							var prettyJSON bytes.Buffer
+							if !httpSender.NotShowResult {
+								if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
+									repetitionChans[i] <- &ResponseData{DataStr: prettyJSON.String(), RepeatNumber: i + 1}
+								} else {
+									repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
+								}
 							}
+						} else {
+							repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
 						}
 					} else {
-						httpSender.showResp(err.Error(), i+1)
+						repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
 					}
-				} else {
-					httpSender.showResp(err.Error(), i+1)
-				}
+				}()
 				if httpSender.Repeat > 1 {
 					httpSender.getDelay()
 					time.Sleep(time.Duration(httpSender.Delay) * time.Millisecond)
 				}
 			}
+			accumulationRespData := ""
+			for i, ch := range repetitionChans {
+				httpSender.showRepeat(i+1, false)
+				resp := <-ch
+				httpSender.accumulationRespData(&accumulationRespData, resp.DataStr, resp.RepeatNumber)
+				close(ch)
+			}
+			repetitionChans = nil
+			httpSender.showResp(&accumulationRespData)
 			httpSender.showRepeat(1, true)
 		} else {
-			httpSender.showResp("Enter the request string", repetitionNumberStub)
+			defaultResp := "Enter the request string"
+			httpSender.showResp(&defaultResp)
 		}
 	})
 }
@@ -128,12 +150,16 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 	return resp, err
 }
 
-func (httpSender *HttpSender) showResp(data string, repeatNumber int) {
+func (httpSender *HttpSender) showResp(data *string) {
+	httpSender.Display.SetText(*data)
+}
+func (httpSender *HttpSender) accumulationRespData(accumData *string, newResp string, repeatNumber int) {
 	var strBuilder strings.Builder
+	defer strBuilder.Reset()
 	if httpSender.Repeat > 1 {
-		if httpSender.Display.Text != "" {
+		if *accumData != "" {
 			strBuilder.WriteString("[")
-			data := strings.Trim(httpSender.Display.Text, "[")
+			data := strings.Trim(*accumData, "[")
 			data = strings.Trim(data, "]")
 			strBuilder.WriteString(data)
 			strBuilder.WriteString(",")
@@ -145,19 +171,12 @@ func (httpSender *HttpSender) showResp(data string, repeatNumber int) {
 		strBuilder.WriteString(",")
 		strBuilder.WriteString("\n")
 		strBuilder.WriteString("\"data\": \n")
-		strBuilder.WriteString(data)
+		strBuilder.WriteString(newResp)
 		strBuilder.WriteString("}")
 		strBuilder.WriteString("\n")
 		strBuilder.WriteString("]")
-		httpSender.Display.SetText(strBuilder.String())
-		strBuilder.Reset()
-	} else {
-		strBuilder.WriteString("[")
-		strBuilder.WriteString("{")
-		httpSender.Display.SetText(data)
-		strBuilder.WriteString("}")
-		strBuilder.WriteString("]")
 	}
+	*accumData = strBuilder.String()
 }
 
 func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool) {
@@ -196,7 +215,8 @@ func (httpSender *HttpSender) getParams() *bytes.Buffer {
 	}
 	err := json.Unmarshal([]byte(str), &data)
 	if err != nil {
-		httpSender.showResp(err.Error(), repetitionNumberStub)
+		errResp := err.Error()
+		httpSender.showResp(&errResp)
 	}
 	postBody, _ := json.Marshal(data)
 	responseBody := bytes.NewBuffer(postBody)
@@ -231,7 +251,8 @@ func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
 	return widget.NewButton("Copy to clipboard", func() {
 		err := clipboard.Init()
 		if err != nil {
-			httpSender.showResp(err.Error(), repetitionNumberStub)
+			errResp := err.Error()
+			httpSender.showResp(&errResp)
 		}
 		clipboard.Write(clipboard.FmtText, []byte(httpSender.Display.Text))
 	})
@@ -421,7 +442,8 @@ func (httpSender *HttpSender) setHeadersCookiesAndAuth(req *http.Request) {
 		headers := make(map[string]string)
 		err := json.Unmarshal([]byte(httpSender.HeadersEntry.Text), &headers)
 		if err != nil {
-			httpSender.showResp(err.Error(), 1)
+			errResp := err.Error()
+			httpSender.showResp(&errResp)
 		}
 		for k, v := range headers {
 			req.Header.Set(k, v)
