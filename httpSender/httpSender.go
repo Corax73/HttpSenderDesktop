@@ -64,6 +64,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 				repetitionChans[i] = make(chan *ResponseData, 1)
 			}
 			var wg sync.WaitGroup
+			start := time.Now()
 			for i := 0; i < httpSender.Repeat; i++ {
 				wg.Add(1)
 				go func() {
@@ -95,14 +96,15 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			}
 			accumulationRespData := ""
 			for i, ch := range repetitionChans {
-				httpSender.showRepeat(i+1, false)
+				httpSender.showRepeat(i+1, false, nil)
 				resp := <-ch
 				httpSender.accumulationRespData(&accumulationRespData, resp.DataStr, resp.RepeatNumber)
 				close(ch)
 			}
 			repetitionChans = nil
 			httpSender.showResp(&accumulationRespData)
-			httpSender.showRepeat(1, true)
+			timeSpent := time.Since(start)
+			httpSender.showRepeat(1, true, &timeSpent)
 		} else {
 			defaultResp := "Enter the request string"
 			httpSender.showResp(&defaultResp)
@@ -164,29 +166,32 @@ func (httpSender *HttpSender) accumulationRespData(accumData *string, newResp st
 			strBuilder.WriteString(data)
 			strBuilder.WriteString(",")
 		}
-		strBuilder.WriteString("{")
-		strBuilder.WriteString("\n")
-		strBuilder.WriteString("\"repeat_number\": ")
-		strBuilder.WriteString(strconv.Itoa(repeatNumber))
-		strBuilder.WriteString(",")
-		strBuilder.WriteString("\n")
-		strBuilder.WriteString("\"data\": \n")
-		strBuilder.WriteString(newResp)
-		strBuilder.WriteString("}")
-		strBuilder.WriteString("\n")
+	}
+	strBuilder.WriteString("{")
+	strBuilder.WriteString("\n")
+	strBuilder.WriteString("\"repeat_number\": ")
+	strBuilder.WriteString(strconv.Itoa(repeatNumber))
+	strBuilder.WriteString(",")
+	strBuilder.WriteString("\n")
+	strBuilder.WriteString("\"data\": \n")
+	strBuilder.WriteString(newResp)
+	strBuilder.WriteString("}")
+	strBuilder.WriteString("\n")
+	if httpSender.Repeat > 1 {
 		strBuilder.WriteString("]")
 	}
 	*accumData = strBuilder.String()
 }
 
-func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool) {
+func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool, timeSpent *time.Duration) {
 	var strBuilder strings.Builder
 	if !isEnd {
 		strBuilder.WriteString("Repeat №")
 		strBuilder.WriteString(strconv.Itoa(repeatNumber))
 	} else {
 		strBuilder.WriteString(httpSender.DisplayRepeat.Text)
-		strBuilder.WriteString(" All repetitions completed!")
+		strBuilder.WriteString(" All repetitions completed! Time spent ")
+		strBuilder.WriteString(timeSpent.String())
 	}
 	httpSender.DisplayRepeat.SetText(strBuilder.String())
 	strBuilder.Reset()
