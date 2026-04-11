@@ -3,6 +3,7 @@ package httpSender
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -20,17 +21,17 @@ import (
 )
 
 type State struct {
-	Method, BasicAuthUsername, BasicAuthPassword string
-	Repeat, Delay, CookieDefaultExpiration       int
-	NotShowResult                                bool
-	Cookies                                      []*CookieInstance
+	Url, Params, Headers, Method, BasicAuthUsername, BasicAuthPassword string
+	Repeat, Delay, CookieDefaultExpiration                             int
+	NotShowResult                                                      bool
+	Cookies                                                            []CookieInstance
 }
 
 func (state *State) ResetState() {
-	state.Method, state.BasicAuthUsername, state.BasicAuthPassword = "", "", ""
+	state.Url, state.Params, state.Headers, state.Method, state.BasicAuthUsername, state.BasicAuthPassword = "", "", "", "", "", ""
 	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
 	state.NotShowResult = false
-	state.Cookies = make([]*CookieInstance, 0)
+	state.Cookies = make([]CookieInstance, 0)
 
 }
 
@@ -40,13 +41,14 @@ type CookieInstance struct {
 
 type HttpSender struct {
 	State
-	Input, Display, Params, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry *widget.Entry
-	ScrollContainer                                                                                               *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn            *widget.Button
-	DisplayRepeat                                                                                                 *widget.Label
-	SelectMethod                                                                                                  *widget.Select
-	NotShowResultCheckbox                                                                                         *widget.Check
-	BasicAuthForm                                                                                                 *widget.Form
+	stateHistory                                                                                                                   map[string]*State
+	UrlEntry, DisplayEntry, ParamsEntry, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry     *widget.Entry
+	ScrollContainer                                                                                                                *container.Scroll
+	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn, SaveStateBtn, LoadStateBtn *widget.Button
+	DisplayRepeat                                                                                                                  *widget.Label
+	SelectMethod                                                                                                                   *widget.Select
+	NotShowResultCheckbox                                                                                                          *widget.Check
+	BasicAuthForm                                                                                                                  *widget.Form
 }
 
 type ResponseData struct {
@@ -54,11 +56,18 @@ type ResponseData struct {
 	RepeatNumber int
 }
 
+func (httpSender *HttpSender) Load() {
+	httpSender.stateHistory = make(map[string]*State)
+}
+
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 	return widget.NewButton("Send", func() {
-		if httpSender.Input.Text != "" && httpSender.Method != "" {
+		if httpSender.UrlEntry.Text != "" && httpSender.Method != "" {
 			httpSender.getRepeat()
-			httpSender.Display.SetText("")
+			httpSender.Url = httpSender.UrlEntry.Text
+			httpSender.Params = httpSender.ParamsEntry.Text
+			httpSender.Headers = httpSender.HeadersEntry.Text
+			httpSender.DisplayEntry.SetText("")
 			repetitionChans := make([]chan *ResponseData, httpSender.Repeat)
 			for i := 0; i < httpSender.Repeat; i++ {
 				repetitionChans[i] = make(chan *ResponseData, 1)
@@ -121,27 +130,26 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 	}
 	switch httpSender.Method {
 	case "GET":
-		req, err = http.NewRequest(http.MethodGet, httpSender.Input.Text, nil)
+		req, err = http.NewRequest(http.MethodGet, httpSender.UrlEntry.Text, nil)
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
 		}
 	case "POST":
-		req, err = http.NewRequest(http.MethodPost, httpSender.Input.Text, httpSender.getParams())
+		req, err = http.NewRequest(http.MethodPost, httpSender.UrlEntry.Text, httpSender.getParams())
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
 		}
 	case "DELETE":
 		var req *http.Request
-		req, err = http.NewRequest(http.MethodDelete, httpSender.Input.Text, nil)
+		req, err = http.NewRequest(http.MethodDelete, httpSender.UrlEntry.Text, nil)
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
 		}
 	case "PUT":
-		responseBody := httpSender.getParams()
-		req, err = http.NewRequest(http.MethodPut, httpSender.Input.Text, responseBody)
+		req, err = http.NewRequest(http.MethodPut, httpSender.UrlEntry.Text, httpSender.getParams())
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
 			resp, err = client.Do(req)
@@ -153,7 +161,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 }
 
 func (httpSender *HttpSender) showResp(data *string) {
-	httpSender.Display.SetText(*data)
+	httpSender.DisplayEntry.SetText(*data)
 }
 func (httpSender *HttpSender) accumulationRespData(accumData *string, newResp string, repeatNumber int) {
 	var strBuilder strings.Builder
@@ -200,7 +208,7 @@ func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool, timeSpent
 func (httpSender *HttpSender) GetScrollDisplay() *container.Scroll {
 	return container.NewVScroll(container.NewGridWithRows(
 		1,
-		httpSender.Display,
+		httpSender.DisplayEntry,
 	))
 }
 
@@ -214,7 +222,7 @@ func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
 
 func (httpSender *HttpSender) getParams() *bytes.Buffer {
 	data := make(map[string]any)
-	str := httpSender.Params.Text
+	str := httpSender.ParamsEntry.Text
 	if str == "" {
 		str = "{}"
 	}
@@ -248,7 +256,7 @@ func (httpSender *HttpSender) getDelay() {
 
 func (httpSender *HttpSender) ClearResultBtnHandler() *widget.Button {
 	return widget.NewButton("Clear result", func() {
-		httpSender.Display.SetText("")
+		httpSender.DisplayEntry.SetText("")
 	})
 }
 
@@ -259,14 +267,14 @@ func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
 			errResp := err.Error()
 			httpSender.showResp(&errResp)
 		}
-		clipboard.Write(clipboard.FmtText, []byte(httpSender.Display.Text))
+		clipboard.Write(clipboard.FmtText, []byte(httpSender.DisplayEntry.Text))
 	})
 }
 
 func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
 	return widget.NewButton("Clear all parameters", func() {
-		httpSender.Input.SetText("")
-		httpSender.Params.SetText("")
+		httpSender.UrlEntry.SetText("")
+		httpSender.ParamsEntry.SetText("")
 		httpSender.RepeatEntry.SetText("")
 		httpSender.DelayEntry.SetText("")
 		httpSender.SelectMethod.Selected = "Select method"
@@ -282,7 +290,7 @@ func (httpSender *HttpSender) SaveResultBtnHandler(appWindow fyne.Window) *widge
 	return widget.NewButton("Save result to file", func() {
 		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err == nil && writer != nil {
-				_, err := writer.Write([]byte(httpSender.Display.Text))
+				_, err := writer.Write([]byte(httpSender.DisplayEntry.Text))
 				if err != nil {
 					dialog.ShowError(err, appWindow)
 				}
@@ -363,13 +371,13 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 	cookieForm := widget.NewForm()
 	if len(httpSender.Cookies) == 0 {
 		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
-		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
+		httpSender.Cookies = append(httpSender.Cookies, newCookie)
 	}
 	for _, cookie := range httpSender.Cookies {
 		cookieForm.Append("Cookie name", cookie.CookieName)
 		cookieForm.Append("Cookie value", cookie.CookieValue)
 		cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
-		cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(cookie, cookieForm))
+		cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(&cookie, cookieForm))
 	}
 	addButton := httpSender.newCookieBtnHandler(cookieForm)
 
@@ -395,7 +403,7 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 					}
 				}
 			} else {
-				httpSender.Cookies = make([]*CookieInstance, 0)
+				httpSender.Cookies = make([]CookieInstance, 0)
 			}
 		},
 		appWindow,
@@ -409,7 +417,7 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 func (httpSender *HttpSender) newCookieBtnHandler(cookieForm *widget.Form) *widget.Button {
 	return widget.NewButton("Add new cookie", func() {
 		newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
-		httpSender.Cookies = append(httpSender.Cookies, &newCookie)
+		httpSender.Cookies = append(httpSender.Cookies, newCookie)
 		cookieForm.Append("Cookie name", newCookie.CookieName)
 		cookieForm.Append("Cookie value", newCookie.CookieValue)
 		cookieForm.Append("Cookie expiration", newCookie.CookieExpiration)
@@ -423,7 +431,7 @@ func (httpSender *HttpSender) deleteCookieBtnHandler(newCookie *CookieInstance, 
 		"Delete this cookie",
 		func() {
 			for i, cookie := range httpSender.Cookies {
-				if cookie == newCookie {
+				if cookie == *newCookie {
 					httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
 				}
 			}
@@ -432,7 +440,7 @@ func (httpSender *HttpSender) deleteCookieBtnHandler(newCookie *CookieInstance, 
 				cookieForm.Append("Cookie name", cookie.CookieName)
 				cookieForm.Append("Cookie value", cookie.CookieValue)
 				cookieForm.Append("Cookie expiration", cookie.CookieExpiration)
-				cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(cookie, cookieForm))
+				cookieForm.Append("Delete", httpSender.deleteCookieBtnHandler(&cookie, cookieForm))
 			}
 			cookieForm.Refresh()
 		},
@@ -458,4 +466,55 @@ func (httpSender *HttpSender) setHeadersCookiesAndAuth(req *http.Request) {
 		req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 	}
 	httpSender.setCookies(req)
+}
+
+func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget.Button {
+	return widget.NewButton("Save state for reuse", func() {
+		stateTitleForm := widget.NewForm()
+		titleEntry := widget.NewEntry()
+		stateTitleForm.Append("State title", titleEntry)
+		dialogContent := container.NewScroll(
+			container.NewVBox(
+				stateTitleForm,
+			),
+		)
+
+		dlg := dialog.NewCustomConfirm(
+			"Set title for this state",
+			"Submit",
+			"Cancel",
+			dialogContent,
+			func(ok bool) {
+				if ok {
+					httpSender.getRepeat()
+					httpSender.getDelay()
+					httpSender.stateHistory[titleEntry.Text] = &State{
+						httpSender.UrlEntry.Text,
+						httpSender.ParamsEntry.Text,
+						httpSender.HeadersEntry.Text,
+						httpSender.Method,
+						httpSender.BasicAuthUsernameEntry.Text,
+						httpSender.BasicAuthPasswordEntry.Text,
+						httpSender.Repeat,
+						httpSender.Delay,
+						httpSender.CookieDefaultExpiration,
+						httpSender.NotShowResult,
+						httpSender.Cookies,
+					}
+				}
+			},
+			appWindow,
+		)
+
+		dlg.Resize(fyne.NewSize(300, float32((len(httpSender.Cookies)+1)*170)))
+		dlg.Show()
+	})
+}
+
+func (httpSender *HttpSender) LoadStateBtnHandler() *widget.Button {
+	return widget.NewButton("Load state for reuse", func() {
+		for _, instance := range httpSender.stateHistory {
+			fmt.Println(instance)
+		}
+	})
 }
