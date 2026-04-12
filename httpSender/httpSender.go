@@ -486,7 +486,7 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 			"Cancel",
 			dialogContent,
 			func(ok bool) {
-				if ok {
+				if ok && titleEntry.Text != "" {
 					httpSender.getRepeat()
 					httpSender.getDelay()
 					httpSender.stateHistory[titleEntry.Text] = &State{
