@@ -3,7 +3,6 @@ package httpSender
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"slices"
@@ -21,14 +20,14 @@ import (
 )
 
 type State struct {
-	Url, Params, Headers, Method, BasicAuthUsername, BasicAuthPassword string
-	Repeat, Delay, CookieDefaultExpiration                             int
-	NotShowResult                                                      bool
-	Cookies                                                            []CookieInstance
+	Url, Params, Headers, Method, BasicAuthUsername, BasicAuthPassword, ResponseData string
+	Repeat, Delay, CookieDefaultExpiration                                           int
+	NotShowResult                                                                    bool
+	Cookies                                                                          []CookieInstance
 }
 
 func (state *State) ResetState() {
-	state.Url, state.Params, state.Headers, state.Method, state.BasicAuthUsername, state.BasicAuthPassword = "", "", "", "", "", ""
+	state.Url, state.Params, state.Headers, state.Method, state.BasicAuthUsername, state.BasicAuthPassword, state.ResponseData = "", "", "", "", "", "", ""
 	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
 	state.NotShowResult = false
 	state.Cookies = make([]CookieInstance, 0)
@@ -84,12 +83,10 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 						if err == nil {
 							defer resp.Body.Close()
 							var prettyJSON bytes.Buffer
-							if !httpSender.NotShowResult {
-								if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
-									repetitionChans[i] <- &ResponseData{DataStr: prettyJSON.String(), RepeatNumber: i + 1}
-								} else {
-									repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
-								}
+							if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
+								repetitionChans[i] <- &ResponseData{DataStr: prettyJSON.String(), RepeatNumber: i + 1}
+							} else {
+								repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
 							}
 						} else {
 							repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
@@ -111,7 +108,10 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 				close(ch)
 			}
 			repetitionChans = nil
-			httpSender.showResp(&accumulationRespData)
+			httpSender.ResponseData = accumulationRespData
+			if !httpSender.NotShowResult {
+				httpSender.showResp(&accumulationRespData)
+			}
 			timeSpent := time.Since(start)
 			httpSender.showRepeat(1, true, &timeSpent)
 		} else {
@@ -257,6 +257,7 @@ func (httpSender *HttpSender) getDelay() {
 func (httpSender *HttpSender) ClearResultBtnHandler() *widget.Button {
 	return widget.NewButton("Clear result", func() {
 		httpSender.DisplayEntry.SetText("")
+		httpSender.ResponseData = ""
 	})
 }
 
@@ -267,7 +268,7 @@ func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
 			errResp := err.Error()
 			httpSender.showResp(&errResp)
 		}
-		clipboard.Write(clipboard.FmtText, []byte(httpSender.DisplayEntry.Text))
+		clipboard.Write(clipboard.FmtText, []byte(httpSender.ResponseData))
 	})
 }
 
@@ -290,7 +291,7 @@ func (httpSender *HttpSender) SaveResultBtnHandler(appWindow fyne.Window) *widge
 	return widget.NewButton("Save result to file", func() {
 		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err == nil && writer != nil {
-				_, err := writer.Write([]byte(httpSender.DisplayEntry.Text))
+				_, err := writer.Write([]byte(httpSender.ResponseData))
 				if err != nil {
 					dialog.ShowError(err, appWindow)
 				}
@@ -495,6 +496,7 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 						httpSender.Method,
 						httpSender.BasicAuthUsernameEntry.Text,
 						httpSender.BasicAuthPasswordEntry.Text,
+						"",
 						httpSender.Repeat,
 						httpSender.Delay,
 						httpSender.CookieDefaultExpiration,
@@ -506,15 +508,55 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 			appWindow,
 		)
 
-		dlg.Resize(fyne.NewSize(300, float32((len(httpSender.Cookies)+1)*170)))
+		dlg.Resize(fyne.NewSize(300, 170))
 		dlg.Show()
 	})
 }
 
-func (httpSender *HttpSender) LoadStateBtnHandler() *widget.Button {
+func (httpSender *HttpSender) LoadStateBtnHandler(appWindow fyne.Window) *widget.Button {
 	return widget.NewButton("Load state for reuse", func() {
-		for _, instance := range httpSender.stateHistory {
-			fmt.Println(instance)
+		var keys []string
+		for k, _ := range httpSender.stateHistory {
+			keys = append(keys, k)
 		}
+
+		selectWidget := widget.NewSelect(keys, func(value string) {})
+
+		dialogContent := container.NewScroll(
+			container.NewVBox(
+				selectWidget,
+			),
+		)
+		dlg := dialog.NewCustomConfirm(
+			"Set title for this state",
+			"Submit",
+			"Cancel",
+			dialogContent,
+			func(ok bool) {
+				if ok {
+					httpSender.useStateByTitle(selectWidget.Selected)
+				}
+			},
+			appWindow,
+		)
+
+		dlg.Resize(fyne.NewSize(300, 170))
+		dlg.Show()
 	})
+}
+
+func (httpSender *HttpSender) useStateByTitle(title string) {
+	state, ok := httpSender.stateHistory[title]
+	if ok {
+		httpSender.UrlEntry.SetText(state.Url)
+		httpSender.ParamsEntry.SetText(state.Params)
+		httpSender.HeadersEntry.SetText(state.Headers)
+		httpSender.SelectMethod.SetSelected(state.Method)
+		httpSender.BasicAuthUsernameEntry.SetText(state.BasicAuthUsername)
+		httpSender.BasicAuthPasswordEntry.SetText(state.BasicAuthPassword)
+		httpSender.RepeatEntry.SetText(strconv.Itoa(state.Repeat))
+		httpSender.DelayEntry.SetText(strconv.Itoa(state.Delay))
+		httpSender.NotShowResultCheckbox.SetChecked(state.NotShowResult)
+		httpSender.Cookies = state.Cookies
+	}
 }

@@ -50,7 +50,7 @@ func main() {
 	httpSender.HeadersEntry.SetPlaceHolder("Enter headers by JSON, default is 'Content-Type', 'application/json'" +
 		" and 'User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36'")
 	httpSender.SaveStateBtn = httpSender.SaveStateBtnHandler(window)
-	httpSender.LoadStateBtn = httpSender.LoadStateBtnHandler()
+	httpSender.LoadStateBtn = httpSender.LoadStateBtnHandler(window)
 	httpSender.Load()
 
 	content := container.NewGridWithColumns(
