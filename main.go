@@ -60,39 +60,25 @@ func main() {
 			httpSender.HeadersEntry,
 			httpSender.ParamsEntry,
 		),
-		container.NewGridWithRows(
-			3,
-			container.NewBorder(
-				nil,
-				nil,
-				nil,
-				nil,
+		container.NewVBox(
+			container.NewVBox(
 				container.NewGridWithColumns(
-					2,
+					3,
 					httpSender.RepeatEntry,
 					httpSender.DelayEntry,
+					httpSender.SelectMethod,
 				),
-			),
-			container.NewBorder(
-				nil,
-				nil,
-				nil,
-				nil,
-				container.NewGridWithRows(
+				container.NewGridWithColumns(
+					4,
+					httpSender.SetBasicAuthBtn,
+					httpSender.SetCookieBtn,
+					httpSender.ClearParametersBtn,
+					httpSender.SendBtn,
+				),
+				container.NewGridWithColumns(
 					2,
-					container.NewGridWithColumns(
-						5,
-						httpSender.SelectMethod,
-						httpSender.SetBasicAuthBtn,
-						httpSender.SetCookieBtn,
-						httpSender.ClearParametersBtn,
-						httpSender.SendBtn,
-					),
-					container.NewGridWithColumns(
-						2,
-						httpSender.SaveStateBtn,
-						httpSender.LoadStateBtn,
-					),
+					httpSender.SaveStateBtn,
+					httpSender.LoadStateBtn,
 				),
 			),
 			container.NewGridWithColumns(
