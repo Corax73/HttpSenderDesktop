@@ -13,6 +13,9 @@ import (
 
 	"golang.design/x/clipboard"
 
+	goutils "github.com/Corax73/goUtils"
+	goutilsCurl "github.com/Corax73/goUtils/curl"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
@@ -57,6 +60,20 @@ type ResponseData struct {
 
 func (httpSender *HttpSender) Load() {
 	httpSender.stateHistory = make(map[string]*State)
+	httpSender.UrlEntry.OnChanged = func(content string) {
+		if strings.Contains(content, "curl") {
+			curlData := goutilsCurl.ParseCurlString(content)
+			httpSender.UrlEntry.SetText(curlData.Url)
+			httpSender.SelectMethod.SetSelected(curlData.Method)
+			httpSender.ParamsEntry.SetText(curlData.Data)
+			headersStrSlise := []string{"{"}
+			for k, v := range curlData.Headers {
+				headersStrSlise = append(headersStrSlise, `"`, k, `":"`, v, `"`)
+			}
+			headersStrSlise = append(headersStrSlise, "}")
+			httpSender.HeadersEntry.SetText(goutils.ConcatSlice(headersStrSlise))
+		}
+	}
 }
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
