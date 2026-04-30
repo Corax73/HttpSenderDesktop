@@ -72,6 +72,13 @@ func (httpSender *HttpSender) Load() {
 			}
 			headersStrSlise = append(headersStrSlise, "}")
 			httpSender.HeadersEntry.SetText(goutils.ConcatSlice(headersStrSlise))
+			httpSender.Cookies = make([]CookieInstance, 0)
+			for k, v := range curlData.Cookies {
+				newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
+				newCookie.CookieName.SetText(k)
+				newCookie.CookieValue.SetText(v)
+				httpSender.Cookies = append(httpSender.Cookies, newCookie)
+			}
 		}
 	}
 }
