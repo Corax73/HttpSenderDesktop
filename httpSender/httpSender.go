@@ -68,8 +68,9 @@ func (httpSender *HttpSender) Load() {
 			httpSender.ParamsEntry.SetText(curlData.Data)
 			headersStrSlise := []string{"{"}
 			for k, v := range curlData.Headers {
-				headersStrSlise = append(headersStrSlise, `"`, k, `":"`, v, `"`)
+				headersStrSlise = append(headersStrSlise, `"`, k, `":"`, v, `",`)
 			}
+			headersStrSlise[len(headersStrSlise)-1] = `"`
 			headersStrSlise = append(headersStrSlise, "}")
 			httpSender.HeadersEntry.SetText(goutils.ConcatSlice(headersStrSlise))
 			httpSender.Cookies = make([]CookieInstance, 0)
