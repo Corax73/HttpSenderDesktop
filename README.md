@@ -5,7 +5,7 @@ Simple desktop application, no registration or data storage, with a graphical in
 Libraries used https://github.com/fyne-io/fyne, https://github.com/fyne-io/fyne-cross (for testing), https://github.com/golang-design/clipboard and others from the go standard library.
 
 ### Explanations:
-1. The query string is sent as is, with GET parameters.
+1. The query string is sent as is, with GET parameters.*
 2. JSON with headers.
 3. JSON with parameters.
 4. Delay between requests (with a given repetition).
@@ -18,5 +18,20 @@ Libraries used https://github.com/fyne-io/fyne, https://github.com/fyne-io/fyne-
 11. Load one of the previously saved states.
 
 The buttons also have self-explanatory names.
+
+*You can paste the curl query string into the URL address window. The URL and the following options are parsed:
+
+    "-G"
+	"--get"
+	"-I"
+	"--head"
+	"-X"
+	"--request"
+	"-H"
+	"--header"
+	"-d"
+	"--data"
+	"-b"
+	"--cookie"
 
 <p align="cen-er"><img src="readmeImg/screen.jpg"></p>
