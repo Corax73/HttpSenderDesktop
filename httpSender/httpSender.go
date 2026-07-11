@@ -27,6 +27,7 @@ type State struct {
 	Repeat, Delay, CookieDefaultExpiration                                           int
 	NotShowResult                                                                    bool
 	Cookies                                                                          []CookieInstance
+	UrlencodeData                                                                    []goutilsCurl.UrlencodeData
 }
 
 func (state *State) ResetState() {
@@ -34,6 +35,7 @@ func (state *State) ResetState() {
 	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
 	state.NotShowResult = false
 	state.Cookies = make([]CookieInstance, 0)
+	state.UrlencodeData = make([]goutilsCurl.UrlencodeData, 0)
 
 }
 
@@ -66,13 +68,19 @@ func (httpSender *HttpSender) Load() {
 			httpSender.UrlEntry.SetText(curlData.Url)
 			httpSender.SelectMethod.SetSelected(curlData.Method)
 			httpSender.ParamsEntry.SetText(curlData.Data)
-			headersStrSlise := []string{"{"}
-			for k, v := range curlData.Headers {
-				headersStrSlise = append(headersStrSlise, `"`, k, `":"`, v, `",`)
+			if len(curlData.UrlencodeData) != 0 {
+				curlData.Headers["Content-Type"] = "application/x-www-form-urlencoded"
+				httpSender.UrlencodeData = curlData.UrlencodeData
 			}
-			headersStrSlise[len(headersStrSlise)-1] = `"`
-			headersStrSlise = append(headersStrSlise, "}")
-			httpSender.HeadersEntry.SetText(goutils.ConcatSlice(headersStrSlise))
+			if len(curlData.Headers) != 0 {
+				headersStrSlise := []string{"{"}
+				for k, v := range curlData.Headers {
+					headersStrSlise = append(headersStrSlise, `"`, k, `":"`, v, `",`)
+				}
+				headersStrSlise[len(headersStrSlise)-1] = `"`
+				headersStrSlise = append(headersStrSlise, "}")
+				httpSender.HeadersEntry.SetText(goutils.ConcatSlice(headersStrSlise))
+			}
 			httpSender.Cookies = make([]CookieInstance, 0)
 			for k, v := range curlData.Cookies {
 				newCookie := CookieInstance{widget.NewEntry(), widget.NewEntry(), widget.NewEntry()}
@@ -158,12 +166,14 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 		req, err = http.NewRequest(http.MethodGet, httpSender.UrlEntry.Text, nil)
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
+			httpSender.applyUrlencodeData(req)
 			resp, err = client.Do(req)
 		}
 	case "POST":
 		req, err = http.NewRequest(http.MethodPost, httpSender.UrlEntry.Text, httpSender.getParams())
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
+			httpSender.applyUrlencodeData(req)
 			resp, err = client.Do(req)
 		}
 	case "DELETE":
@@ -171,12 +181,14 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 		req, err = http.NewRequest(http.MethodDelete, httpSender.UrlEntry.Text, nil)
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
+			httpSender.applyUrlencodeData(req)
 			resp, err = client.Do(req)
 		}
 	case "PUT":
 		req, err = http.NewRequest(http.MethodPut, httpSender.UrlEntry.Text, httpSender.getParams())
 		if err == nil {
 			httpSender.setHeadersCookiesAndAuth(req)
+			httpSender.applyUrlencodeData(req)
 			resp, err = client.Do(req)
 		}
 	default:
@@ -527,6 +539,7 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 						httpSender.CookieDefaultExpiration,
 						httpSender.NotShowResult,
 						httpSender.Cookies,
+						httpSender.UrlencodeData,
 					}
 				}
 			},
@@ -541,7 +554,7 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 func (httpSender *HttpSender) LoadStateBtnHandler(appWindow fyne.Window) *widget.Button {
 	return widget.NewButton("Load state for reuse", func() {
 		var keys []string
-		for k, _ := range httpSender.stateHistory {
+		for k := range httpSender.stateHistory {
 			keys = append(keys, k)
 		}
 
@@ -583,5 +596,16 @@ func (httpSender *HttpSender) useStateByTitle(title string) {
 		httpSender.DelayEntry.SetText(strconv.Itoa(state.Delay))
 		httpSender.NotShowResultCheckbox.SetChecked(state.NotShowResult)
 		httpSender.Cookies = state.Cookies
+		httpSender.UrlencodeData = state.UrlencodeData
+	}
+}
+
+func (httpSender *HttpSender) applyUrlencodeData(req *http.Request) {
+	if len(httpSender.UrlencodeData) != 0 {
+		q := req.URL.Query()
+		for _, data := range httpSender.UrlencodeData {
+			q.Add(data.Key, data.Value)
+		}
+		req.URL.RawQuery = q.Encode()
 	}
 }
