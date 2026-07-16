@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"slices"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -114,7 +114,6 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 					if err == nil {
 						body, err := io.ReadAll(resp.Body)
 						if err == nil {
-							defer resp.Body.Close()
 							var prettyJSON bytes.Buffer
 							if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
 								repetitionChans[i] <- &ResponseData{DataStr: prettyJSON.String(), RepeatNumber: i + 1}
@@ -127,6 +126,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 					} else {
 						repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
 					}
+					defer resp.Body.Close()
 				}()
 				if httpSender.Repeat > 1 {
 					httpSender.getDelay()
@@ -199,6 +199,7 @@ func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
 
 func (httpSender *HttpSender) showResp(data *string) {
 	httpSender.DisplayEntry.SetText(*data)
+	debug.FreeOSMemory()
 }
 func (httpSender *HttpSender) accumulationRespData(accumData *string, newResp string, repeatNumber int) {
 	var strBuilder strings.Builder
@@ -373,7 +374,8 @@ func (httpSender *HttpSender) SetBasicAuthBtnHandler(appWindow fyne.Window) *wid
 }
 
 func (httpSender *HttpSender) setCookies(req *http.Request) {
-	for i, cookie := range httpSender.Cookies {
+	var validCookies []CookieInstance
+	for _, cookie := range httpSender.Cookies {
 		name := cookie.CookieName.Text
 		value := cookie.CookieValue.Text
 		if name != "" && value != "" {
@@ -383,7 +385,8 @@ func (httpSender *HttpSender) setCookies(req *http.Request) {
 				expirationInt = httpSender.CookieDefaultExpiration
 			}
 			expiration := time.Now().Add(time.Duration(expirationInt) * time.Hour)
-			cookie := http.Cookie{
+			validCookies = append(validCookies, cookie)
+			reqCookie := http.Cookie{
 				Name:     name,
 				Value:    value,
 				Expires:  expiration,
@@ -392,11 +395,10 @@ func (httpSender *HttpSender) setCookies(req *http.Request) {
 				Secure:   true,
 				SameSite: http.SameSiteLaxMode,
 			}
-			req.AddCookie(&cookie)
-		} else {
-			httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
+			req.AddCookie(&reqCookie)
 		}
 	}
+	httpSender.Cookies = validCookies
 }
 
 func (httpSender *HttpSender) SetDynamicCookieFormBtnHandler(appWindow fyne.Window) *widget.Button {
@@ -433,13 +435,15 @@ func (httpSender *HttpSender) showDynamicCookieFormDialog(appWindow fyne.Window)
 		dialogContent,
 		func(ok bool) {
 			if ok {
-				for i, cookie := range httpSender.Cookies {
+				var validCookies []CookieInstance
+				for _, cookie := range httpSender.Cookies {
 					name := cookie.CookieName.Text
 					value := cookie.CookieValue.Text
-					if name == "" || value == "" {
-						httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
+					if name != "" || value != "" {
+						validCookies = append(validCookies, cookie)
 					}
 				}
+				httpSender.Cookies = validCookies
 			} else {
 				httpSender.Cookies = make([]CookieInstance, 0)
 			}
@@ -468,11 +472,13 @@ func (httpSender *HttpSender) deleteCookieBtnHandler(newCookie *CookieInstance, 
 	return widget.NewButton(
 		"Delete this cookie",
 		func() {
-			for i, cookie := range httpSender.Cookies {
-				if cookie == *newCookie {
-					httpSender.Cookies = slices.Delete(httpSender.Cookies, i, i+1)
+			var validCookies []CookieInstance
+			for _, cookie := range httpSender.Cookies {
+				if cookie != *newCookie {
+					validCookies = append(validCookies, cookie)
 				}
 			}
+			httpSender.Cookies = validCookies
 			cookieForm.Items = make([]*widget.FormItem, 0)
 			for _, cookie := range httpSender.Cookies {
 				cookieForm.Append("Cookie name", cookie.CookieName)
