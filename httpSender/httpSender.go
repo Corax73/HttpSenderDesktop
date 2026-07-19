@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -104,29 +103,15 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			for i := 0; i < httpSender.Repeat; i++ {
 				repetitionChans[i] = make(chan *ResponseData, 1)
 			}
+			client := &http.Client{Timeout: 30 * time.Second}
 			var wg sync.WaitGroup
+			defer wg.Wait()
 			start := time.Now()
 			for i := 0; i < httpSender.Repeat; i++ {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					resp, err := httpSender.SendByMethod()
-					if err == nil {
-						body, err := io.ReadAll(resp.Body)
-						if err == nil {
-							var prettyJSON bytes.Buffer
-							if err := json.Indent(&prettyJSON, []byte(body), "", "    "); err == nil {
-								repetitionChans[i] <- &ResponseData{DataStr: prettyJSON.String(), RepeatNumber: i + 1}
-							} else {
-								repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
-							}
-						} else {
-							repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
-						}
-					} else {
-						repetitionChans[i] <- &ResponseData{DataStr: err.Error(), RepeatNumber: i + 1}
-					}
-					defer resp.Body.Close()
+					httpSender.SendByMethod(client, repetitionChans[i], i+1)
 				}()
 				if httpSender.Repeat > 1 {
 					httpSender.getDelay()
@@ -154,52 +139,46 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 	})
 }
 
-func (httpSender *HttpSender) SendByMethod() (*http.Response, error) {
-	var req *http.Request
-	var resp *http.Response
-	var err error
-	client := &http.Client{
-		Transport: &http.Transport{},
+func (httpSender *HttpSender) SendByMethod(client *http.Client, ch chan *ResponseData, repeatNumber int) {
+	jsonData, err := httpSender.getParams()
+	if err != nil {
+		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		return
 	}
-	switch httpSender.Method {
-	case "GET":
-		req, err = http.NewRequest(http.MethodGet, httpSender.UrlEntry.Text, nil)
-		if err == nil {
-			httpSender.setHeadersCookiesAndAuth(req)
-			httpSender.applyUrlencodeData(req)
-			resp, err = client.Do(req)
-		}
-	case "POST":
-		req, err = http.NewRequest(http.MethodPost, httpSender.UrlEntry.Text, httpSender.getParams())
-		if err == nil {
-			httpSender.setHeadersCookiesAndAuth(req)
-			httpSender.applyUrlencodeData(req)
-			resp, err = client.Do(req)
-		}
-	case "DELETE":
-		var req *http.Request
-		req, err = http.NewRequest(http.MethodDelete, httpSender.UrlEntry.Text, nil)
-		if err == nil {
-			httpSender.setHeadersCookiesAndAuth(req)
-			httpSender.applyUrlencodeData(req)
-			resp, err = client.Do(req)
-		}
-	case "PUT":
-		req, err = http.NewRequest(http.MethodPut, httpSender.UrlEntry.Text, httpSender.getParams())
-		if err == nil {
-			httpSender.setHeadersCookiesAndAuth(req)
-			httpSender.applyUrlencodeData(req)
-			resp, err = client.Do(req)
-		}
-	default:
-		return resp, err
+	req, err := http.NewRequest(httpSender.Method, httpSender.UrlEntry.Text, jsonData)
+	if err != nil {
+		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		return
 	}
-	return resp, err
+
+	httpSender.setHeadersCookiesAndAuth(req)
+	httpSender.applyUrlencodeData(req)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		return
+	}
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		return
+	}
+
+	var prettyJSON bytes.Buffer
+	if json.Indent(&prettyJSON, body, "", "  ") == nil {
+		ch <- &ResponseData{DataStr: prettyJSON.String(), RepeatNumber: repeatNumber}
+		return
+	} else {
+		ch <- &ResponseData{DataStr: string(body), RepeatNumber: repeatNumber}
+	}
 }
 
 func (httpSender *HttpSender) showResp(data *string) {
 	httpSender.DisplayEntry.SetText(*data)
-	debug.FreeOSMemory()
 }
 func (httpSender *HttpSender) accumulationRespData(accumData *string, newResp string, repeatNumber int) {
 	var strBuilder strings.Builder
@@ -258,7 +237,7 @@ func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
 	return resp
 }
 
-func (httpSender *HttpSender) getParams() *bytes.Buffer {
+func (httpSender *HttpSender) getParams() (*bytes.Buffer, error) {
 	data := make(map[string]any)
 	str := httpSender.ParamsEntry.Text
 	if str == "" {
@@ -268,10 +247,11 @@ func (httpSender *HttpSender) getParams() *bytes.Buffer {
 	if err != nil {
 		errResp := err.Error()
 		httpSender.showResp(&errResp)
+		return nil, err
 	}
 	postBody, _ := json.Marshal(data)
 	responseBody := bytes.NewBuffer(postBody)
-	return responseBody
+	return responseBody, nil
 }
 
 func (httpSender *HttpSender) getRepeat() {
