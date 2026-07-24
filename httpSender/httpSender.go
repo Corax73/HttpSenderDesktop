@@ -103,10 +103,16 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			for i := 0; i < httpSender.Repeat; i++ {
 				repetitionChans[i] = make(chan *ResponseData, 1)
 			}
-			client := &http.Client{Timeout: 30 * time.Second}
+			client := &http.Client{
+				Timeout: 30 * time.Second,
+				Transport: &http.Transport{
+					MaxIdleConnsPerHost: httpSender.Repeat,
+				},
+			}
 			var wg sync.WaitGroup
 			defer wg.Wait()
 			start := time.Now()
+			httpSender.switchingAvailability(false)
 			for i := 0; i < httpSender.Repeat; i++ {
 				wg.Add(1)
 				go func() {
@@ -118,20 +124,19 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 					time.Sleep(time.Duration(httpSender.Delay) * time.Millisecond)
 				}
 			}
-			accumulationRespData := ""
 			for i, ch := range repetitionChans {
 				httpSender.showRepeat(i+1, false, nil)
 				resp := <-ch
-				httpSender.accumulationRespData(&accumulationRespData, resp.DataStr, resp.RepeatNumber)
+				httpSender.accumulationRespData(&httpSender.ResponseData, resp)
 				close(ch)
 			}
 			repetitionChans = nil
-			httpSender.ResponseData = accumulationRespData
 			if !httpSender.NotShowResult {
-				httpSender.showResp(&accumulationRespData)
+				httpSender.showResp(&httpSender.ResponseData)
 			}
 			timeSpent := time.Since(start)
 			httpSender.showRepeat(1, true, &timeSpent)
+			httpSender.switchingAvailability(true)
 		} else {
 			defaultResp := "Enter the request string"
 			httpSender.showResp(&defaultResp)
@@ -180,7 +185,7 @@ func (httpSender *HttpSender) SendByMethod(client *http.Client, ch chan *Respons
 func (httpSender *HttpSender) showResp(data *string) {
 	httpSender.DisplayEntry.SetText(*data)
 }
-func (httpSender *HttpSender) accumulationRespData(accumData *string, newResp string, repeatNumber int) {
+func (httpSender *HttpSender) accumulationRespData(accumData *string, resp *ResponseData) {
 	var strBuilder strings.Builder
 	defer strBuilder.Reset()
 	if httpSender.Repeat > 1 {
@@ -195,11 +200,12 @@ func (httpSender *HttpSender) accumulationRespData(accumData *string, newResp st
 	strBuilder.WriteString("{")
 	strBuilder.WriteString("\n")
 	strBuilder.WriteString("\"repeat_number\": ")
-	strBuilder.WriteString(strconv.Itoa(repeatNumber))
+	strBuilder.WriteString(strconv.Itoa(resp.RepeatNumber))
 	strBuilder.WriteString(",")
 	strBuilder.WriteString("\n")
 	strBuilder.WriteString("\"data\": \n")
-	strBuilder.WriteString(newResp)
+	strBuilder.WriteString(resp.DataStr)
+	resp = nil
 	strBuilder.WriteString("}")
 	strBuilder.WriteString("\n")
 	if httpSender.Repeat > 1 {
@@ -593,5 +599,49 @@ func (httpSender *HttpSender) applyUrlencodeData(req *http.Request) {
 			q.Add(data.Key, data.Value)
 		}
 		req.URL.RawQuery = q.Encode()
+	}
+}
+
+func (httpSender *HttpSender) switchingAvailability(isOn bool) {
+	if isOn {
+		httpSender.UrlEntry.Enable()
+		httpSender.DisplayEntry.Enable()
+		httpSender.ParamsEntry.Enable()
+		httpSender.RepeatEntry.Enable()
+		httpSender.DelayEntry.Enable()
+		httpSender.BasicAuthUsernameEntry.Enable()
+		httpSender.BasicAuthPasswordEntry.Enable()
+		httpSender.HeadersEntry.Enable()
+		httpSender.SendBtn.Enable()
+		httpSender.ClearResultBtn.Enable()
+		httpSender.CopyBtn.Enable()
+		httpSender.ClearParametersBtn.Enable()
+		httpSender.SaveResultBtn.Enable()
+		httpSender.SetBasicAuthBtn.Enable()
+		httpSender.SetCookieBtn.Enable()
+		httpSender.SaveStateBtn.Enable()
+		httpSender.LoadStateBtn.Enable()
+		httpSender.SelectMethod.Enable()
+		httpSender.NotShowResultCheckbox.Enable()
+	} else {
+		httpSender.UrlEntry.Disable()
+		httpSender.DisplayEntry.Disable()
+		httpSender.ParamsEntry.Disable()
+		httpSender.RepeatEntry.Disable()
+		httpSender.DelayEntry.Disable()
+		httpSender.BasicAuthUsernameEntry.Disable()
+		httpSender.BasicAuthPasswordEntry.Disable()
+		httpSender.HeadersEntry.Disable()
+		httpSender.SendBtn.Disable()
+		httpSender.ClearResultBtn.Disable()
+		httpSender.CopyBtn.Disable()
+		httpSender.ClearParametersBtn.Disable()
+		httpSender.SaveResultBtn.Disable()
+		httpSender.SetBasicAuthBtn.Disable()
+		httpSender.SetCookieBtn.Disable()
+		httpSender.SaveStateBtn.Disable()
+		httpSender.LoadStateBtn.Disable()
+		httpSender.SelectMethod.Disable()
+		httpSender.NotShowResultCheckbox.Disable()
 	}
 }
