@@ -3,6 +3,7 @@ package httpSender
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 
 	"golang.design/x/clipboard"
 
-	goutils "github.com/Corax73/goUtils"
 	goutilsCurl "github.com/Corax73/goUtils/curl"
 
 	"fyne.io/fyne/v2"
@@ -27,6 +27,7 @@ type State struct {
 	NotShowResult                                                                    bool
 	Cookies                                                                          []CookieInstance
 	UrlencodeData                                                                    []goutilsCurl.UrlencodeData
+	Responses                                                                        []*CustomResponse
 }
 
 func (state *State) ResetState() {
@@ -35,6 +36,7 @@ func (state *State) ResetState() {
 	state.NotShowResult = false
 	state.Cookies = make([]CookieInstance, 0)
 	state.UrlencodeData = make([]goutilsCurl.UrlencodeData, 0)
+	state.Responses = make([]*CustomResponse, 0)
 
 }
 
@@ -54,9 +56,15 @@ type HttpSender struct {
 	BasicAuthForm                                                                                                                  *widget.Form
 }
 
-type ResponseData struct {
-	DataStr      string
+type HttpResponseData struct {
+	Error        error
+	DataBytes    []byte
 	RepeatNumber int
+}
+
+type CustomResponse struct {
+	Data         json.RawMessage `json:"data"`
+	RepeatNumber int             `json:"repeat_number"`
 }
 
 func (httpSender *HttpSender) Load() {
@@ -72,13 +80,10 @@ func (httpSender *HttpSender) Load() {
 				httpSender.UrlencodeData = curlData.UrlencodeData
 			}
 			if len(curlData.Headers) != 0 {
-				headersStrSlise := []string{"{"}
-				for k, v := range curlData.Headers {
-					headersStrSlise = append(headersStrSlise, `"`, k, `":"`, v, `",`)
+				headersBytes, err := json.MarshalIndent(curlData.Headers, "", " ")
+				if err == nil {
+					httpSender.HeadersEntry.SetText(string(headersBytes))
 				}
-				headersStrSlise[len(headersStrSlise)-1] = `"`
-				headersStrSlise = append(headersStrSlise, "}")
-				httpSender.HeadersEntry.SetText(goutils.ConcatSlice(headersStrSlise))
 			}
 			httpSender.Cookies = make([]CookieInstance, 0)
 			for k, v := range curlData.Cookies {
@@ -99,9 +104,9 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			httpSender.Params = httpSender.ParamsEntry.Text
 			httpSender.Headers = httpSender.HeadersEntry.Text
 			httpSender.DisplayEntry.SetText("")
-			repetitionChans := make([]chan *ResponseData, httpSender.Repeat)
+			repetitionChans := make([]chan *HttpResponseData, httpSender.Repeat)
 			for i := 0; i < httpSender.Repeat; i++ {
-				repetitionChans[i] = make(chan *ResponseData, 1)
+				repetitionChans[i] = make(chan *HttpResponseData, 1)
 			}
 			client := &http.Client{
 				Timeout: 30 * time.Second,
@@ -115,22 +120,40 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			httpSender.switchingAvailability(false)
 			for i := 0; i < httpSender.Repeat; i++ {
 				wg.Add(1)
-				go func() {
+				go func(counter int) {
 					defer wg.Done()
-					httpSender.SendByMethod(client, repetitionChans[i], i+1)
-				}()
+					httpSender.SendByMethod(client, repetitionChans[counter], counter+1)
+				}(i)
 				if httpSender.Repeat > 1 {
 					httpSender.getDelay()
 					time.Sleep(time.Duration(httpSender.Delay) * time.Millisecond)
 				}
 			}
+			httpSender.DisplayEntry.SetPlaceHolder("Reading responses to requests...")
 			for i, ch := range repetitionChans {
 				httpSender.showRepeat(i+1, false, nil)
 				resp := <-ch
-				httpSender.accumulationRespData(&httpSender.ResponseData, resp)
+				if json.Valid(resp.DataBytes) {
+					httpSender.Responses = append(httpSender.Responses,
+						&CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
+					)
+				} else {
+					if resp.Error != nil {
+						httpSender.Responses = append(
+							httpSender.Responses,
+							&CustomResponse{Data: json.RawMessage(resp.Error.Error()), RepeatNumber: resp.RepeatNumber},
+						)
+					} else {
+						errMsg := fmt.Sprintf(`{"error": "Invalid JSON response", "body": %q}`, string(resp.DataBytes))
+						httpSender.Responses = append(httpSender.Responses, &CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
+					}
+				}
 				close(ch)
 			}
+			httpSender.DisplayEntry.SetPlaceHolder("")
 			repetitionChans = nil
+			bytesData, _ := json.MarshalIndent(httpSender.Responses, "", " ")
+			httpSender.ResponseData = string(bytesData)
 			if !httpSender.NotShowResult {
 				httpSender.showResp(&httpSender.ResponseData)
 			}
@@ -144,24 +167,28 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 	})
 }
 
-func (httpSender *HttpSender) SendByMethod(client *http.Client, ch chan *ResponseData, repeatNumber int) {
+func (httpSender *HttpSender) SendByMethod(client *http.Client, ch chan *HttpResponseData, repeatNumber int) {
 	jsonData, err := httpSender.getParams()
 	if err != nil {
-		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		ch <- &HttpResponseData{Error: err, RepeatNumber: repeatNumber}
 		return
 	}
 	req, err := http.NewRequest(httpSender.Method, httpSender.UrlEntry.Text, jsonData)
 	if err != nil {
-		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		ch <- &HttpResponseData{Error: err, RepeatNumber: repeatNumber}
 		return
 	}
 
-	httpSender.setHeadersCookiesAndAuth(req)
+	err = httpSender.setHeadersCookiesAndAuth(req)
+	if err != nil {
+		ch <- &HttpResponseData{Error: err, RepeatNumber: repeatNumber}
+		return
+	}
 	httpSender.applyUrlencodeData(req)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		ch <- &HttpResponseData{Error: err, RepeatNumber: repeatNumber}
 		return
 	}
 	if resp != nil {
@@ -169,49 +196,15 @@ func (httpSender *HttpSender) SendByMethod(client *http.Client, ch chan *Respons
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		ch <- &ResponseData{DataStr: err.Error(), RepeatNumber: repeatNumber}
+		ch <- &HttpResponseData{Error: err, RepeatNumber: repeatNumber}
 		return
 	}
 
-	var prettyJSON bytes.Buffer
-	if json.Indent(&prettyJSON, body, "", "  ") == nil {
-		ch <- &ResponseData{DataStr: prettyJSON.String(), RepeatNumber: repeatNumber}
-		return
-	} else {
-		ch <- &ResponseData{DataStr: string(body), RepeatNumber: repeatNumber}
-	}
+	ch <- &HttpResponseData{DataBytes: body, RepeatNumber: repeatNumber}
 }
 
 func (httpSender *HttpSender) showResp(data *string) {
 	httpSender.DisplayEntry.SetText(*data)
-}
-func (httpSender *HttpSender) accumulationRespData(accumData *string, resp *ResponseData) {
-	var strBuilder strings.Builder
-	defer strBuilder.Reset()
-	if httpSender.Repeat > 1 {
-		if *accumData != "" {
-			strBuilder.WriteString("[")
-			data := strings.Trim(*accumData, "[")
-			data = strings.Trim(data, "]")
-			strBuilder.WriteString(data)
-			strBuilder.WriteString(",")
-		}
-	}
-	strBuilder.WriteString("{")
-	strBuilder.WriteString("\n")
-	strBuilder.WriteString("\"repeat_number\": ")
-	strBuilder.WriteString(strconv.Itoa(resp.RepeatNumber))
-	strBuilder.WriteString(",")
-	strBuilder.WriteString("\n")
-	strBuilder.WriteString("\"data\": \n")
-	strBuilder.WriteString(resp.DataStr)
-	resp = nil
-	strBuilder.WriteString("}")
-	strBuilder.WriteString("\n")
-	if httpSender.Repeat > 1 {
-		strBuilder.WriteString("]")
-	}
-	*accumData = strBuilder.String()
 }
 
 func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool, timeSpent *time.Duration) {
@@ -255,7 +248,10 @@ func (httpSender *HttpSender) getParams() (*bytes.Buffer, error) {
 		httpSender.showResp(&errResp)
 		return nil, err
 	}
-	postBody, _ := json.Marshal(data)
+	postBody, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
 	responseBody := bytes.NewBuffer(postBody)
 	return responseBody, nil
 }
@@ -373,13 +369,10 @@ func (httpSender *HttpSender) setCookies(req *http.Request) {
 			expiration := time.Now().Add(time.Duration(expirationInt) * time.Hour)
 			validCookies = append(validCookies, cookie)
 			reqCookie := http.Cookie{
-				Name:     name,
-				Value:    value,
-				Expires:  expiration,
-				Path:     "/",
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteLaxMode,
+				Name:    name,
+				Value:   value,
+				Expires: expiration,
+				Path:    "/",
 			}
 			req.AddCookie(&reqCookie)
 		}
@@ -477,16 +470,15 @@ func (httpSender *HttpSender) deleteCookieBtnHandler(newCookie *CookieInstance, 
 	)
 }
 
-func (httpSender *HttpSender) setHeadersCookiesAndAuth(req *http.Request) {
+func (httpSender *HttpSender) setHeadersCookiesAndAuth(req *http.Request) (err error) {
 	if httpSender.HeadersEntry.Text == "" {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36")
 	} else {
 		headers := make(map[string]string)
-		err := json.Unmarshal([]byte(httpSender.HeadersEntry.Text), &headers)
+		err = json.Unmarshal([]byte(httpSender.HeadersEntry.Text), &headers)
 		if err != nil {
-			errResp := err.Error()
-			httpSender.showResp(&errResp)
+			return
 		}
 		for k, v := range headers {
 			req.Header.Set(k, v)
@@ -496,6 +488,7 @@ func (httpSender *HttpSender) setHeadersCookiesAndAuth(req *http.Request) {
 		req.SetBasicAuth(httpSender.BasicAuthUsername, httpSender.BasicAuthPassword)
 	}
 	httpSender.setCookies(req)
+	return
 }
 
 func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget.Button {
@@ -532,6 +525,7 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 						httpSender.NotShowResult,
 						httpSender.Cookies,
 						httpSender.UrlencodeData,
+						httpSender.Responses,
 					}
 				}
 			},
@@ -589,6 +583,7 @@ func (httpSender *HttpSender) useStateByTitle(title string) {
 		httpSender.NotShowResultCheckbox.SetChecked(state.NotShowResult)
 		httpSender.Cookies = state.Cookies
 		httpSender.UrlencodeData = state.UrlencodeData
+		httpSender.Responses = state.Responses
 	}
 }
 
@@ -613,6 +608,7 @@ func (httpSender *HttpSender) switchingAvailability(isOn bool) {
 		httpSender.BasicAuthPasswordEntry.Enable()
 		httpSender.HeadersEntry.Enable()
 		httpSender.SendBtn.Enable()
+		httpSender.SendBtn.SetText("Send")
 		httpSender.ClearResultBtn.Enable()
 		httpSender.CopyBtn.Enable()
 		httpSender.ClearParametersBtn.Enable()
@@ -643,5 +639,6 @@ func (httpSender *HttpSender) switchingAvailability(isOn bool) {
 		httpSender.LoadStateBtn.Disable()
 		httpSender.SelectMethod.Disable()
 		httpSender.NotShowResultCheckbox.Disable()
+		httpSender.SendBtn.SetText("Sending...")
 	}
 }
