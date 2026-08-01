@@ -153,6 +153,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			httpSender.DisplayEntry.SetPlaceHolder("")
 			repetitionChans = nil
 			bytesData, _ := json.MarshalIndent(httpSender.Responses, "", " ")
+			httpSender.Responses = nil
 			httpSender.ResponseData = string(bytesData)
 			if !httpSender.NotShowResult {
 				httpSender.showResp(&httpSender.ResponseData)
