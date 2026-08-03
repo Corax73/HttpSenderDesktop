@@ -141,10 +141,22 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 					if resp.Error != nil {
 						httpSender.Responses = append(
 							httpSender.Responses,
-							&CustomResponse{Data: json.RawMessage(resp.Error.Error()), RepeatNumber: resp.RepeatNumber},
+							&CustomResponse{
+								Data: json.RawMessage(
+									strings.ReplaceAll(
+										strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
+										":", " "),
+								),
+								RepeatNumber: resp.RepeatNumber,
+							},
 						)
 					} else {
-						errMsg := fmt.Sprintf(`{"error": "Invalid JSON response", "body": %q}`, string(resp.DataBytes))
+						errMsg := fmt.Sprintf(
+							`{"error": "Invalid JSON response", "body": %q}`,
+							strings.ReplaceAll(
+								strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(resp.DataBytes), `"`, ""), "\r", ""), "\n", ""),
+								":", " "),
+						)
 						httpSender.Responses = append(httpSender.Responses, &CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
 					}
 				}
@@ -152,9 +164,22 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			}
 			httpSender.DisplayEntry.SetPlaceHolder("")
 			repetitionChans = nil
-			bytesData, _ := json.MarshalIndent(httpSender.Responses, "", " ")
-			httpSender.Responses = nil
+			bytesData, err := json.MarshalIndent(httpSender.Responses, "", " ")
+			if err != nil {
+				for _, item := range httpSender.Responses {
+					if len(item.Data) == 0 {
+						item.Data = json.RawMessage(`{"error": "Empty response"}`)
+						continue
+					}
+
+					if !json.Valid(item.Data) {
+						item.Data = json.RawMessage(fmt.Sprintf(`"error": "%s"`, string(item.Data)))
+					}
+				}
+				bytesData, _ = json.MarshalIndent(httpSender.Responses, "", " ")
+			}
 			httpSender.ResponseData = string(bytesData)
+			httpSender.Responses = nil
 			if !httpSender.NotShowResult {
 				httpSender.showResp(&httpSender.ResponseData)
 			}
