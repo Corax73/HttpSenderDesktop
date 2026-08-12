@@ -37,7 +37,6 @@ func (state *State) ResetState() {
 	state.Cookies = make([]CookieInstance, 0)
 	state.UrlencodeData = make([]goutilsCurl.UrlencodeData, 0)
 	state.Responses = make([]*CustomResponse, 0)
-
 }
 
 type CookieInstance struct {

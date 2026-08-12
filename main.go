@@ -2,6 +2,7 @@ package main
 
 import (
 	"httpSenderDesktop/customTheme"
+	"httpSenderDesktop/grpcSender"
 	"httpSenderDesktop/httpSender"
 
 	"fyne.io/fyne/v2"
@@ -53,7 +54,7 @@ func main() {
 	httpSender.LoadStateBtn = httpSender.LoadStateBtnHandler(window)
 	httpSender.Load()
 
-	content := container.NewGridWithColumns(
+	httpTab := container.NewGridWithColumns(
 		1,
 		container.NewVBox(
 			httpSender.UrlEntry,
@@ -89,7 +90,7 @@ func main() {
 		),
 		container.NewBorder(
 			nil,
-			btnExit,
+			nil,
 			nil,
 			container.NewBorder(
 				httpSender.ClearResultBtn,
@@ -101,7 +102,55 @@ func main() {
 			httpSender.ScrollContainer,
 		),
 	)
-	window.SetContent(content)
+
+	grpcSender := grpcSender.GrpcSender{
+		UrlEntry:             widget.NewEntry(),
+		FullServiceNameEntry: widget.NewEntry(),
+		DisplayEntry:         widget.NewEntry(),
+		ParamsEntry:          widget.NewEntry(),
+	}
+	grpcSender.ResetState()
+	grpcSender.ParamsEntry.MultiLine = true
+	grpcSender.ParamsEntry.SetPlaceHolder("Enter parameters by JSON")
+	grpcSender.ParseMethodsBtn = grpcSender.ParseMethodsBtnHandler()
+	grpcSender.UrlEntry.SetPlaceHolder("Enter the address grpc server")
+	grpcSender.FullServiceNameEntry.SetPlaceHolder("Enter the full service name (including the package)")
+	grpcSender.SelectMethod = grpcSender.GetSelectMethod()
+	grpcSender.ScrollContainer = grpcSender.GetScrollDisplay()
+
+	grpcTab := container.NewGridWithColumns(
+		1,
+		container.NewVBox(
+			grpcSender.UrlEntry,
+			grpcSender.FullServiceNameEntry,
+			grpcSender.SelectMethod,
+			grpcSender.ParamsEntry,
+		),
+		container.NewBorder(
+			nil,
+			nil,
+			nil,
+			container.NewBorder(
+				grpcSender.ParseMethodsBtn,
+				nil,
+				nil,
+				nil,
+				nil,
+			),
+			grpcSender.ScrollContainer,
+		),
+	)
+
+	tabs := container.NewAppTabs(
+		container.NewTabItem("Http tab", httpTab),
+		container.NewTabItem("Grpc tab", grpcTab),
+	)
+
+	mainLayout := container.NewBorder(nil, btnExit, nil, nil, tabs)
+
+	tabs.SetTabLocation(container.TabLocationLeading)
+
+	window.SetContent(mainLayout)
 	window.CenterOnScreen()
 	window.Resize(fyne.NewSize(950, 600))
 	window.ShowAndRun()
