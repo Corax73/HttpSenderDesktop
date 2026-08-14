@@ -117,6 +117,7 @@ func main() {
 	grpcSender.FullServiceNameEntry.SetPlaceHolder("Enter the full service name (including the package)")
 	grpcSender.SelectMethod = grpcSender.GetSelectMethod()
 	grpcSender.ScrollContainer = grpcSender.GetScrollDisplay()
+	grpcSender.SendBtn = grpcSender.SendBtnHandler()
 
 	grpcTab := container.NewGridWithColumns(
 		1,
@@ -132,7 +133,7 @@ func main() {
 			nil,
 			container.NewBorder(
 				grpcSender.ParseMethodsBtn,
-				nil,
+				grpcSender.SendBtn,
 				nil,
 				nil,
 				nil,

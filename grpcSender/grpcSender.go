@@ -23,10 +23,19 @@ type GrpcSender struct {
 
 func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
 	return widget.NewButton("Parse methods", func() {
-		list, err := grpcSender.parseServerMethods(grpcSender.UrlEntry.Text, grpcSender.FullServiceNameEntry.Text)
+		grpcSender.Url = grpcSender.UrlEntry.Text
+		grpcSender.FullServiceName = grpcSender.FullServiceNameEntry.Text
+		grpcSender.Method = grpcSender.SelectMethod.Selected
+		if grpcSender.Url == "" || grpcSender.FullServiceName == "" {
+			errStr := "Check server and service name"
+			grpcSender.showResp(&errStr)
+			return
+		}
+		list, err := grpcSender.parseServerMethods()
 		if err != nil {
 			errStr := err.Error()
 			grpcSender.showResp(&errStr)
+			return
 		}
 		listLength := len(*list)
 		if listLength > 0 {
@@ -37,6 +46,25 @@ func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
 			grpcSender.SelectMethod.Options = methodNames
 			grpcSender.SelectMethod.Enable()
 		}
+	})
+}
+
+func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
+	return widget.NewButton("Send", func() {
+		grpcSender.Params = grpcSender.ParamsEntry.Text
+		if grpcSender.Url == "" || grpcSender.FullServiceName == "" || grpcSender.Method == "" || grpcSender.Params == "" {
+			errStr := "Check server, service name or method"
+			grpcSender.showResp(&errStr)
+			return
+		}
+		resp := grpcSender.executeRpcMethod()
+		if resp.Error != nil {
+			errStr := resp.Error.Error()
+			grpcSender.showResp(&errStr)
+			return
+		}
+		strData := string(resp.DataBytes)
+		grpcSender.showResp(&strData)
 	})
 }
 
