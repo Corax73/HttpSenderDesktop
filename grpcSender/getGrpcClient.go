@@ -15,6 +15,11 @@ func (grpcSender *GrpcSender) getGrpcClient(ctx context.Context) (conn *grpc.Cli
 		return nil, nil, err
 	}
 
-	client = grpcreflect.NewClientV1Alpha(ctx, reflectpb.NewServerReflectionClient(conn))
+	client = grpcreflect.NewClientV1Alpha(ctx, grpcSender.getServerReflectionClient(conn))
 	return
+}
+
+func (grpcSender *GrpcSender) getServerReflectionClient(conn *grpc.ClientConn) (clientInst reflectpb.ServerReflectionClient) {
+	clientInst = reflectpb.NewServerReflectionClient(conn)
+	return clientInst
 }
