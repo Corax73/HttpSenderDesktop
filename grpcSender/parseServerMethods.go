@@ -2,7 +2,9 @@ package grpcSender
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jhump/protoreflect/desc"
@@ -44,5 +46,17 @@ func (grpcSender *GrpcSender) decodeDescriptorProtoWithReflection(conn *grpc.Cli
 	resp, _ := stream.Recv()
 	fd := &descriptorpb.FileDescriptorProto{}
 	proto.Unmarshal(resp.GetFileDescriptorResponse().FileDescriptorProto[0], fd)
-	fmt.Println(fd)
+	methodsSlice := make([]*methodDescription, 0)
+	for _, m := range fd.MessageType {
+		if strings.Contains(*m.Name, "Request") {
+			description := methodDescription{Name: *m.Name}
+			for _, f := range m.Field {
+				field := fieldDescription{Name: f.GetJsonName(), Type: strings.ToLower(strings.ReplaceAll((f.GetType().String()), "TYPE_", ""))}
+				description.Fields = append(description.Fields, &field)
+			}
+			methodsSlice = append(methodsSlice, &description)
+		}
+	}
+	bytes, _ := json.Marshal(methodsSlice)
+	fmt.Println(string(bytes))
 }
