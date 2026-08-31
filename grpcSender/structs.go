@@ -6,8 +6,9 @@ type rpcResponseData struct {
 }
 
 type methodDescription struct {
-	Name   string              `json:"name"`
-	Fields []*fieldDescription `json:"fields"`
+	Name       string              `json:"name"`
+	MethodName string              `json:"method_name"`
+	Fields     []*fieldDescription `json:"fields"`
 }
 
 type fieldDescription struct {

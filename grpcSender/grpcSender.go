@@ -1,24 +1,32 @@
 package grpcSender
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
+	"golang.design/x/clipboard"
 )
 
 type State struct {
 	Url, FullServiceName, Params, Method, ResponseData string
+	MethodsDescription                                 []*methodDescription
 }
 
 func (state *State) ResetState() {
 	state.Url, state.FullServiceName, state.Params, state.Method, state.ResponseData = "", "", "", "", ""
+	state.MethodsDescription = make([]*methodDescription, 0)
 }
 
 type GrpcSender struct {
 	State
-	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry             *widget.Entry
-	ScrollContainer                                                       *container.Scroll
-	ParseMethodsBtn, SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn *widget.Button
-	SelectMethod                                                          *widget.Select
+	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry                                       *widget.Entry
+	ScrollContainer                                                                                 *container.Scroll
+	ParseMethodsBtn, SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, CopyMethodDescriptionBtn *widget.Button
+	SelectMethod                                                                                    *widget.Select
+	MethodDescriptionDisplay                                                                        *widget.Label
 }
 
 func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
@@ -42,6 +50,14 @@ func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
 			methodNames := make([]string, 0, listLength)
 			for _, m := range *list {
 				methodNames = append(methodNames, m.GetName())
+
+				methodDesc := m.GetInputType()
+				description := methodDescription{Name: methodDesc.GetName(), MethodName: m.GetName()}
+				for _, f := range methodDesc.GetFields() {
+					field := fieldDescription{Name: f.GetJSONName(), Type: strings.ToLower(strings.ReplaceAll((f.GetType().String()), "TYPE_", ""))}
+					description.Fields = append(description.Fields, &field)
+				}
+				grpcSender.MethodsDescription = append(grpcSender.MethodsDescription, &description)
 			}
 			grpcSender.SelectMethod.Options = methodNames
 			grpcSender.SelectMethod.Enable()
@@ -78,6 +94,19 @@ func (grpcSender *GrpcSender) GetScrollDisplay() *container.Scroll {
 func (grpcSender *GrpcSender) GetSelectMethod() *widget.Select {
 	resp := widget.NewSelect([]string{}, func(value string) {
 		grpcSender.Method = value
+		if len(grpcSender.MethodsDescription) > 0 {
+			for _, v := range grpcSender.MethodsDescription {
+				if v.MethodName == value {
+					jsonData, err := json.Marshal(v.Fields)
+					if err != nil {
+						grpcSender.MethodDescriptionDisplay.SetText(fmt.Sprintf("Error marshaling to JSON: %v", err))
+						return
+					}
+					grpcSender.MethodDescriptionDisplay.SetText(string(jsonData))
+					return
+				}
+			}
+		}
 	})
 	resp.PlaceHolder = "Select method"
 	resp.Disable()
@@ -86,4 +115,15 @@ func (grpcSender *GrpcSender) GetSelectMethod() *widget.Select {
 
 func (grpcSender *GrpcSender) showResp(data *string) {
 	grpcSender.DisplayEntry.SetText(*data)
+}
+
+func (grpcSender *GrpcSender) CopyBtnHandler() *widget.Button {
+	return widget.NewButton("Copy to clipboard", func() {
+		err := clipboard.Init()
+		if err != nil {
+			errResp := err.Error()
+			grpcSender.showResp(&errResp)
+		}
+		clipboard.Write(clipboard.FmtText, []byte(grpcSender.MethodDescriptionDisplay.Text))
+	})
 }

@@ -104,10 +104,11 @@ func main() {
 	)
 
 	grpcSender := grpcSender.GrpcSender{
-		UrlEntry:             widget.NewEntry(),
-		FullServiceNameEntry: widget.NewEntry(),
-		DisplayEntry:         widget.NewEntry(),
-		ParamsEntry:          widget.NewEntry(),
+		UrlEntry:                 widget.NewEntry(),
+		FullServiceNameEntry:     widget.NewEntry(),
+		DisplayEntry:             widget.NewEntry(),
+		ParamsEntry:              widget.NewEntry(),
+		MethodDescriptionDisplay: widget.NewLabel("Description of method request parameters"),
 	}
 	grpcSender.ResetState()
 	grpcSender.ParamsEntry.MultiLine = true
@@ -118,6 +119,7 @@ func main() {
 	grpcSender.SelectMethod = grpcSender.GetSelectMethod()
 	grpcSender.ScrollContainer = grpcSender.GetScrollDisplay()
 	grpcSender.SendBtn = grpcSender.SendBtnHandler()
+	grpcSender.CopyMethodDescriptionBtn = grpcSender.CopyBtnHandler()
 
 	grpcTab := container.NewGridWithColumns(
 		1,
@@ -125,6 +127,10 @@ func main() {
 			grpcSender.UrlEntry,
 			grpcSender.FullServiceNameEntry,
 			grpcSender.SelectMethod,
+			container.NewVBox(
+				grpcSender.MethodDescriptionDisplay,
+				grpcSender.CopyMethodDescriptionBtn,
+			),
 			grpcSender.ParamsEntry,
 		),
 		container.NewBorder(
