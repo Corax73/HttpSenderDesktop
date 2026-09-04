@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"golang.design/x/clipboard"
 )
@@ -22,11 +24,13 @@ func (state *State) ResetState() {
 
 type GrpcSender struct {
 	State
-	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry                                       *widget.Entry
-	ScrollContainer                                                                                 *container.Scroll
-	ParseMethodsBtn, SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, CopyMethodDescriptionBtn *widget.Button
-	SelectMethod                                                                                    *widget.Select
-	MethodDescriptionDisplay                                                                        *widget.Label
+	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry *widget.Entry
+	ScrollContainer                                           *container.Scroll
+	ParseMethodsBtn, SendBtn, ClearResultBtn, CopyBtn,
+	ClearParametersBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn,
+	SaveResultBtn *widget.Button
+	SelectMethod             *widget.Select
+	MethodDescriptionDisplay *widget.Label
 }
 
 func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
@@ -79,8 +83,8 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 			grpcSender.showResp(&errStr)
 			return
 		}
-		strData := string(resp.DataBytes)
-		grpcSender.showResp(&strData)
+		grpcSender.ResponseData = string(resp.DataBytes)
+		grpcSender.showResp(&grpcSender.ResponseData)
 	})
 }
 
@@ -117,13 +121,56 @@ func (grpcSender *GrpcSender) showResp(data *string) {
 	grpcSender.DisplayEntry.SetText(*data)
 }
 
-func (grpcSender *GrpcSender) CopyBtnHandler() *widget.Button {
-	return widget.NewButton("Copy to clipboard", func() {
+func (grpcSender *GrpcSender) MethodDescriptionCopyBtnHandler() *widget.Button {
+	return widget.NewButton("Copy description to clipboard", func() {
 		err := clipboard.Init()
 		if err != nil {
 			errResp := err.Error()
 			grpcSender.showResp(&errResp)
 		}
 		clipboard.Write(clipboard.FmtText, []byte(grpcSender.MethodDescriptionDisplay.Text))
+	})
+}
+
+func (grpcSender *GrpcSender) ClearParametersBtnHandler() *widget.Button {
+	return widget.NewButton("Clear all parameters", func() {
+		grpcSender.UrlEntry.SetText("")
+		grpcSender.ParamsEntry.SetText("")
+		grpcSender.FullServiceNameEntry.SetText("")
+		grpcSender.MethodDescriptionDisplay.SetText("")
+		grpcSender.SelectMethod.Selected = "Select method"
+		grpcSender.SelectMethod.Refresh()
+		grpcSender.ResetState()
+	})
+}
+
+func (grpcSender *GrpcSender) ClearResultBtnHandler() *widget.Button {
+	return widget.NewButton("Clear result", func() {
+		grpcSender.DisplayEntry.SetText("")
+		grpcSender.ResponseData = ""
+	})
+}
+
+func (grpcSender *GrpcSender) ResultCopyBtnHandler() *widget.Button {
+	return widget.NewButton("Copy result to clipboard", func() {
+		err := clipboard.Init()
+		if err != nil {
+			errResp := err.Error()
+			grpcSender.showResp(&errResp)
+		}
+		clipboard.Write(clipboard.FmtText, []byte(grpcSender.ResponseData))
+	})
+}
+
+func (grpcSender *GrpcSender) SaveResultBtnHandler(appWindow fyne.Window) *widget.Button {
+	return widget.NewButton("Save result to file", func() {
+		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
+			if err == nil && writer != nil {
+				_, err := writer.Write([]byte(grpcSender.ResponseData))
+				if err != nil {
+					dialog.ShowError(err, appWindow)
+				}
+			}
+		}, appWindow)
 	})
 }

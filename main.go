@@ -114,12 +114,15 @@ func main() {
 	grpcSender.ParamsEntry.MultiLine = true
 	grpcSender.ParamsEntry.SetPlaceHolder("Enter parameters by JSON")
 	grpcSender.ParseMethodsBtn = grpcSender.ParseMethodsBtnHandler()
-	grpcSender.UrlEntry.SetPlaceHolder("Enter the address grpc server")
+	grpcSender.UrlEntry.SetPlaceHolder("Enter the address grpc server(server-side reflection must be enabled)")
 	grpcSender.FullServiceNameEntry.SetPlaceHolder("Enter the full service name (including the package)")
 	grpcSender.SelectMethod = grpcSender.GetSelectMethod()
 	grpcSender.ScrollContainer = grpcSender.GetScrollDisplay()
 	grpcSender.SendBtn = grpcSender.SendBtnHandler()
-	grpcSender.CopyMethodDescriptionBtn = grpcSender.CopyBtnHandler()
+	grpcSender.CopyMethodDescriptionBtn = grpcSender.MethodDescriptionCopyBtnHandler()
+	grpcSender.ClearParametersBtn = grpcSender.ClearParametersBtnHandler()
+	grpcSender.ResultCopyBtnHandlerBtn = grpcSender.ResultCopyBtnHandler()
+	grpcSender.SaveResultBtn = grpcSender.SaveResultBtnHandler(window)
 
 	grpcTab := container.NewGridWithColumns(
 		1,
@@ -138,7 +141,12 @@ func main() {
 			nil,
 			nil,
 			container.NewBorder(
-				grpcSender.ParseMethodsBtn,
+				container.NewVBox(
+					grpcSender.ParseMethodsBtn,
+					grpcSender.ClearParametersBtn,
+					grpcSender.ResultCopyBtnHandlerBtn,
+					grpcSender.SaveResultBtn,
+				),
 				grpcSender.SendBtn,
 				nil,
 				nil,
