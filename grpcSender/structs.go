@@ -1,8 +1,11 @@
 package grpcSender
 
+import "encoding/json"
+
 type rpcResponseData struct {
-	Error     error
-	DataBytes []byte
+	Error        error
+	DataBytes    []byte
+	RepeatNumber int
 }
 
 type methodDescription struct {
@@ -14,4 +17,9 @@ type methodDescription struct {
 type fieldDescription struct {
 	Name string `json:"name"`
 	Type string `json:"type"`
+}
+
+type CustomResponse struct {
+	Data         json.RawMessage `json:"data"`
+	RepeatNumber int             `json:"repeat_number"`
 }

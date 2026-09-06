@@ -109,6 +109,8 @@ func main() {
 		DisplayEntry:             widget.NewEntry(),
 		ParamsEntry:              widget.NewEntry(),
 		MethodDescriptionDisplay: widget.NewLabel("Description of method request parameters"),
+		DelayEntry:               widget.NewEntry(),
+		RepeatEntry:              widget.NewEntry(),
 	}
 	grpcSender.ResetState()
 	grpcSender.ParamsEntry.MultiLine = true
@@ -123,6 +125,10 @@ func main() {
 	grpcSender.ClearParametersBtn = grpcSender.ClearParametersBtnHandler()
 	grpcSender.ResultCopyBtnHandlerBtn = grpcSender.ResultCopyBtnHandler()
 	grpcSender.SaveResultBtn = grpcSender.SaveResultBtnHandler(window)
+	grpcSender.ClearResultBtn = grpcSender.ClearResultBtnHandler()
+	grpcSender.NotShowResultCheckbox = grpcSender.NotShowResultCheckboxHandler()
+	grpcSender.RepeatEntry.SetPlaceHolder("Enter the number of repetitions, default is 1")
+	grpcSender.DelayEntry.SetPlaceHolder("Enter delay, default is 200 milliseconds")
 
 	grpcTab := container.NewGridWithColumns(
 		1,
@@ -146,11 +152,12 @@ func main() {
 					grpcSender.ClearParametersBtn,
 					grpcSender.ResultCopyBtnHandlerBtn,
 					grpcSender.SaveResultBtn,
+					grpcSender.ClearResultBtn,
 				),
 				grpcSender.SendBtn,
 				nil,
 				nil,
-				nil,
+				grpcSender.NotShowResultCheckbox,
 			),
 			grpcSender.ScrollContainer,
 		),

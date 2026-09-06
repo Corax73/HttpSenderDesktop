@@ -1,9 +1,13 @@
 package grpcSender
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -14,23 +18,30 @@ import (
 
 type State struct {
 	Url, FullServiceName, Params, Method, ResponseData string
+	Repeat, Delay                                      int
 	MethodsDescription                                 []*methodDescription
+	Responses                                          []*CustomResponse
+	NotShowResult                                      bool
 }
 
 func (state *State) ResetState() {
 	state.Url, state.FullServiceName, state.Params, state.Method, state.ResponseData = "", "", "", "", ""
 	state.MethodsDescription = make([]*methodDescription, 0)
+	state.NotShowResult = false
+	state.Repeat, state.Delay = 100, 1
+	state.Responses = make([]*CustomResponse, 0)
 }
 
 type GrpcSender struct {
 	State
-	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry *widget.Entry
-	ScrollContainer                                           *container.Scroll
+	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry, RepeatEntry, DelayEntry *widget.Entry
+	ScrollContainer                                                                    *container.Scroll
 	ParseMethodsBtn, SendBtn, ClearResultBtn, CopyBtn,
 	ClearParametersBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn,
 	SaveResultBtn *widget.Button
 	SelectMethod             *widget.Select
 	MethodDescriptionDisplay *widget.Label
+	NotShowResultCheckbox    *widget.Check
 }
 
 func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
@@ -77,14 +88,90 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 			grpcSender.showResp(&errStr)
 			return
 		}
-		resp := grpcSender.executeRpcMethod()
-		if resp.Error != nil {
-			errStr := resp.Error.Error()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		conn, refClient, err := grpcSender.getGrpcClient(ctx)
+		if err != nil {
+			errStr := fmt.Errorf("Failed to connect to the server: %v", err).Error()
 			grpcSender.showResp(&errStr)
 			return
 		}
-		grpcSender.ResponseData = string(resp.DataBytes)
-		grpcSender.showResp(&grpcSender.ResponseData)
+		defer conn.Close()
+		defer refClient.Reset()
+
+		repetitionChans := make([]chan *rpcResponseData, grpcSender.Repeat)
+		for i := 0; i < grpcSender.Repeat; i++ {
+			repetitionChans[i] = make(chan *rpcResponseData, 1)
+		}
+		var wg sync.WaitGroup
+		defer wg.Wait()
+
+		for i := 0; i < grpcSender.Repeat; i++ {
+			wg.Add(1)
+			go func(counter int) {
+				defer wg.Done()
+				grpcSender.executeRpcMethod(ctx, conn, refClient, repetitionChans[counter], counter+1)
+			}(i)
+			if grpcSender.Repeat > 1 {
+				grpcSender.getDelay()
+				time.Sleep(time.Duration(grpcSender.Delay) * time.Millisecond)
+			}
+		}
+		grpcSender.DisplayEntry.SetPlaceHolder("Reading responses to requests...")
+		for _, ch := range repetitionChans {
+			resp := <-ch
+			if json.Valid(resp.DataBytes) {
+				grpcSender.Responses = append(grpcSender.Responses,
+					&CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
+				)
+			} else {
+				if resp.Error != nil {
+					grpcSender.Responses = append(
+						grpcSender.Responses,
+						&CustomResponse{
+							Data: json.RawMessage(
+								strings.ReplaceAll(
+									strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
+									":", " "),
+							),
+							RepeatNumber: resp.RepeatNumber,
+						},
+					)
+				} else {
+					errMsg := fmt.Sprintf(
+						`{"error": "Invalid JSON response", "body": %q}`,
+						strings.ReplaceAll(
+							strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(resp.DataBytes), `"`, ""), "\r", ""), "\n", ""),
+							":", " "),
+					)
+					grpcSender.Responses = append(grpcSender.Responses, &CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
+				}
+			}
+			close(ch)
+		}
+
+		repetitionChans = nil
+		bytesData, err := json.MarshalIndent(grpcSender.Responses, "", " ")
+		if err != nil {
+			for _, item := range grpcSender.Responses {
+				if len(item.Data) == 0 {
+					item.Data = json.RawMessage(`{"error": "Empty response"}`)
+					continue
+				}
+
+				if !json.Valid(item.Data) {
+					item.Data = json.RawMessage(fmt.Sprintf(`"error": "%s"`, string(item.Data)))
+				}
+			}
+			bytesData, _ = json.MarshalIndent(grpcSender.Responses, "", " ")
+		}
+		grpcSender.ResponseData = string(bytesData)
+		grpcSender.Responses = nil
+		if !grpcSender.NotShowResult {
+			grpcSender.showResp(&grpcSender.ResponseData)
+		}
 	})
 }
 
@@ -140,6 +227,8 @@ func (grpcSender *GrpcSender) ClearParametersBtnHandler() *widget.Button {
 		grpcSender.MethodDescriptionDisplay.SetText("")
 		grpcSender.SelectMethod.Selected = "Select method"
 		grpcSender.SelectMethod.Refresh()
+		grpcSender.DelayEntry.SetText("")
+		grpcSender.RepeatEntry.SetText("")
 		grpcSender.ResetState()
 	})
 }
@@ -173,4 +262,28 @@ func (grpcSender *GrpcSender) SaveResultBtnHandler(appWindow fyne.Window) *widge
 			}
 		}, appWindow)
 	})
+}
+
+func (grpcSender *GrpcSender) NotShowResultCheckboxHandler() *widget.Check {
+	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
+		grpcSender.NotShowResult = value
+	})
+}
+
+func (grpcSender *GrpcSender) getRepeat() {
+	if grpcSender.RepeatEntry.Text != "" {
+		number, err := strconv.Atoi(grpcSender.RepeatEntry.Text)
+		if err == nil {
+			grpcSender.Repeat = number
+		}
+	}
+}
+
+func (grpcSender *GrpcSender) getDelay() {
+	if grpcSender.DelayEntry.Text != "" {
+		number, err := strconv.Atoi(grpcSender.DelayEntry.Text)
+		if err == nil {
+			grpcSender.Delay = number
+		}
+	}
 }
