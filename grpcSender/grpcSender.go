@@ -36,7 +36,7 @@ type GrpcSender struct {
 	State
 	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry, RepeatEntry, DelayEntry *widget.Entry
 	ScrollContainer                                                                    *container.Scroll
-	ParseMethodsBtn, SendBtn, ClearResultBtn, CopyBtn,
+	ParseMethodsBtn, SendBtn, ClearResultBtn,
 	ClearParametersBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn,
 	SaveResultBtn *widget.Button
 	SelectMethod             *widget.Select
@@ -108,7 +108,7 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		}
 		var wg sync.WaitGroup
 		defer wg.Wait()
-
+		grpcSender.switchingAvailability(false)
 		for i := 0; i < grpcSender.Repeat; i++ {
 			wg.Add(1)
 			go func(counter int) {
@@ -173,6 +173,7 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		if !grpcSender.NotShowResult {
 			grpcSender.showResp(&grpcSender.ResponseData)
 		}
+		grpcSender.switchingAvailability(true)
 	})
 }
 
@@ -286,5 +287,43 @@ func (grpcSender *GrpcSender) getDelay() {
 		if err == nil {
 			grpcSender.Delay = number
 		}
+	}
+}
+
+func (grpcSender *GrpcSender) switchingAvailability(isOn bool) {
+	if isOn {
+		grpcSender.UrlEntry.Enable()
+		grpcSender.FullServiceNameEntry.Enable()
+		grpcSender.DisplayEntry.Enable()
+		grpcSender.ParamsEntry.Enable()
+		grpcSender.RepeatEntry.Enable()
+		grpcSender.DelayEntry.Enable()
+		grpcSender.SendBtn.Enable()
+		grpcSender.SendBtn.SetText("Send")
+		grpcSender.ClearResultBtn.Enable()
+		grpcSender.ClearParametersBtn.Enable()
+		grpcSender.SaveResultBtn.Enable()
+		grpcSender.SelectMethod.Enable()
+		grpcSender.NotShowResultCheckbox.Enable()
+		grpcSender.CopyMethodDescriptionBtn.Enable()
+		grpcSender.ResultCopyBtnHandlerBtn.Enable()
+		grpcSender.ParseMethodsBtn.Enable()
+	} else {
+		grpcSender.UrlEntry.Disable()
+		grpcSender.FullServiceNameEntry.Disable()
+		grpcSender.DisplayEntry.Disable()
+		grpcSender.ParamsEntry.Disable()
+		grpcSender.RepeatEntry.Disable()
+		grpcSender.DelayEntry.Disable()
+		grpcSender.SendBtn.Disable()
+		grpcSender.ClearResultBtn.Disable()
+		grpcSender.ClearParametersBtn.Disable()
+		grpcSender.SaveResultBtn.Disable()
+		grpcSender.SelectMethod.Disable()
+		grpcSender.NotShowResultCheckbox.Disable()
+		grpcSender.SendBtn.SetText("Sending...")
+		grpcSender.CopyMethodDescriptionBtn.Disable()
+		grpcSender.ResultCopyBtnHandlerBtn.Disable()
+		grpcSender.ParseMethodsBtn.Disable()
 	}
 }
