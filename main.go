@@ -141,6 +141,11 @@ func main() {
 				grpcSender.CopyMethodDescriptionBtn,
 			),
 			grpcSender.ParamsEntry,
+			container.NewGridWithColumns(
+				2,
+				grpcSender.RepeatEntry,
+				grpcSender.DelayEntry,
+			),
 		),
 		container.NewBorder(
 			nil,

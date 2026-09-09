@@ -28,7 +28,7 @@ func (state *State) ResetState() {
 	state.Url, state.FullServiceName, state.Params, state.Method, state.ResponseData = "", "", "", "", ""
 	state.MethodsDescription = make([]*methodDescription, 0)
 	state.NotShowResult = false
-	state.Repeat, state.Delay = 100, 1
+	state.Repeat, state.Delay = 1, 200
 	state.Responses = make([]*CustomResponse, 0)
 }
 
@@ -101,6 +101,7 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		defer conn.Close()
 		defer refClient.Reset()
 
+		grpcSender.getRepeat()
 		repetitionChans := make([]chan *rpcResponseData, grpcSender.Repeat)
 		for i := 0; i < grpcSender.Repeat; i++ {
 			repetitionChans[i] = make(chan *rpcResponseData, 1)
