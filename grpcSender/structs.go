@@ -1,6 +1,8 @@
 package grpcSender
 
-import "encoding/json"
+import (
+	common "httpSenderDesktop/common/structs"
+)
 
 type rpcResponseData struct {
 	Error        error
@@ -19,7 +21,10 @@ type fieldDescription struct {
 	Type string `json:"type"`
 }
 
-type CustomResponse struct {
-	Data         json.RawMessage `json:"data"`
-	RepeatNumber int             `json:"repeat_number"`
+type state struct {
+	Url, FullServiceName, Params, Method, ResponseData string
+	Repeat, Delay                                      int
+	MethodsDescription                                 []*methodDescription
+	Responses                                          []*common.CustomResponse
+	NotShowResult                                      bool
 }

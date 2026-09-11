@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	common "httpSenderDesktop/common/structs"
 	"io"
 	"net/http"
 	"strconv"
@@ -21,49 +22,13 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-type State struct {
-	Url, Params, Headers, Method, BasicAuthUsername, BasicAuthPassword, ResponseData string
-	Repeat, Delay, CookieDefaultExpiration                                           int
-	NotShowResult                                                                    bool
-	Cookies                                                                          []CookieInstance
-	UrlencodeData                                                                    []goutilsCurl.UrlencodeData
-	Responses                                                                        []*CustomResponse
-}
-
 func (state *State) ResetState() {
 	state.Url, state.Params, state.Headers, state.Method, state.BasicAuthUsername, state.BasicAuthPassword, state.ResponseData = "", "", "", "", "", "", ""
 	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
 	state.NotShowResult = false
 	state.Cookies = make([]CookieInstance, 0)
 	state.UrlencodeData = make([]goutilsCurl.UrlencodeData, 0)
-	state.Responses = make([]*CustomResponse, 0)
-}
-
-type CookieInstance struct {
-	CookieName, CookieValue, CookieExpiration *widget.Entry
-}
-
-type HttpSender struct {
-	State
-	stateHistory                                                                                                                   map[string]*State
-	UrlEntry, DisplayEntry, ParamsEntry, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry     *widget.Entry
-	ScrollContainer                                                                                                                *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn, SaveStateBtn, LoadStateBtn *widget.Button
-	DisplayRepeat                                                                                                                  *widget.Label
-	SelectMethod                                                                                                                   *widget.Select
-	NotShowResultCheckbox                                                                                                          *widget.Check
-	BasicAuthForm                                                                                                                  *widget.Form
-}
-
-type HttpResponseData struct {
-	Error        error
-	DataBytes    []byte
-	RepeatNumber int
-}
-
-type CustomResponse struct {
-	Data         json.RawMessage `json:"data"`
-	RepeatNumber int             `json:"repeat_number"`
+	state.Responses = make([]*common.CustomResponse, 0)
 }
 
 func (httpSender *HttpSender) Load() {
@@ -117,6 +82,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			defer wg.Wait()
 			start := time.Now()
 			httpSender.switchingAvailability(false)
+			httpSender.getDelay()
 			for i := 0; i < httpSender.Repeat; i++ {
 				wg.Add(1)
 				go func(counter int) {
@@ -124,7 +90,6 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 					httpSender.SendByMethod(client, repetitionChans[counter], counter+1)
 				}(i)
 				if httpSender.Repeat > 1 {
-					httpSender.getDelay()
 					time.Sleep(time.Duration(httpSender.Delay) * time.Millisecond)
 				}
 			}
@@ -134,13 +99,13 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 				resp := <-ch
 				if json.Valid(resp.DataBytes) {
 					httpSender.Responses = append(httpSender.Responses,
-						&CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
+						&common.CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
 					)
 				} else {
 					if resp.Error != nil {
 						httpSender.Responses = append(
 							httpSender.Responses,
-							&CustomResponse{
+							&common.CustomResponse{
 								Data: json.RawMessage(
 									strings.ReplaceAll(
 										strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
@@ -156,7 +121,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 								strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(resp.DataBytes), `"`, ""), "\r", ""), "\n", ""),
 								":", " "),
 						)
-						httpSender.Responses = append(httpSender.Responses, &CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
+						httpSender.Responses = append(httpSender.Responses, &common.CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
 					}
 				}
 				close(ch)

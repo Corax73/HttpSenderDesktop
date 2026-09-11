@@ -45,11 +45,10 @@ func (grpcSender *GrpcSender) executeRpcMethod(
 	outputMsgDesc := methodDesc.GetOutputType()
 	dynamicOutputMsg := dynamic.NewMessage(outputMsgDesc)
 
-	err = grpc.Invoke(ctx,
+	err = conn.Invoke(ctx,
 		fmt.Sprintf("/%s/%s", grpcSender.FullServiceName, grpcSender.Method),
 		dynamicInputMsg,
 		dynamicOutputMsg,
-		conn,
 	)
 	if err != nil {
 		response.Error = fmt.Errorf("RPC execution error: %v", err)

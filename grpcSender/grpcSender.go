@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	common "httpSenderDesktop/common/structs"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,24 +17,8 @@ import (
 	"golang.design/x/clipboard"
 )
 
-type State struct {
-	Url, FullServiceName, Params, Method, ResponseData string
-	Repeat, Delay                                      int
-	MethodsDescription                                 []*methodDescription
-	Responses                                          []*CustomResponse
-	NotShowResult                                      bool
-}
-
-func (state *State) ResetState() {
-	state.Url, state.FullServiceName, state.Params, state.Method, state.ResponseData = "", "", "", "", ""
-	state.MethodsDescription = make([]*methodDescription, 0)
-	state.NotShowResult = false
-	state.Repeat, state.Delay = 1, 200
-	state.Responses = make([]*CustomResponse, 0)
-}
-
 type GrpcSender struct {
-	State
+	state
 	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry, RepeatEntry, DelayEntry *widget.Entry
 	ScrollContainer                                                                    *container.Scroll
 	ParseMethodsBtn, SendBtn, ClearResultBtn,
@@ -42,6 +27,14 @@ type GrpcSender struct {
 	SelectMethod             *widget.Select
 	MethodDescriptionDisplay *widget.Label
 	NotShowResultCheckbox    *widget.Check
+}
+
+func (state *state) ResetState() {
+	state.Url, state.FullServiceName, state.Params, state.Method, state.ResponseData = "", "", "", "", ""
+	state.MethodsDescription = make([]*methodDescription, 0)
+	state.NotShowResult = false
+	state.Repeat, state.Delay = 1, 200
+	state.Responses = make([]*common.CustomResponse, 0)
 }
 
 func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
@@ -109,14 +102,16 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		var wg sync.WaitGroup
 		defer wg.Wait()
 		grpcSender.switchingAvailability(false)
+		grpcSender.getDelay()
 		for i := 0; i < grpcSender.Repeat; i++ {
 			wg.Add(1)
 			go func(counter int) {
 				defer wg.Done()
-				grpcSender.executeRpcMethod(ctx, conn, refClient, repetitionChans[counter], counter+1)
+				reqCtx, reqCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer reqCancel()
+				grpcSender.executeRpcMethod(reqCtx, conn, refClient, repetitionChans[counter], counter+1)
 			}(i)
 			if grpcSender.Repeat > 1 {
-				grpcSender.getDelay()
 				time.Sleep(time.Duration(grpcSender.Delay) * time.Millisecond)
 			}
 		}
@@ -125,13 +120,13 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 			resp := <-ch
 			if json.Valid(resp.DataBytes) {
 				grpcSender.Responses = append(grpcSender.Responses,
-					&CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
+					&common.CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
 				)
 			} else {
 				if resp.Error != nil {
 					grpcSender.Responses = append(
 						grpcSender.Responses,
-						&CustomResponse{
+						&common.CustomResponse{
 							Data: json.RawMessage(
 								strings.ReplaceAll(
 									strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
@@ -147,7 +142,7 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 							strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(resp.DataBytes), `"`, ""), "\r", ""), "\n", ""),
 							":", " "),
 					)
-					grpcSender.Responses = append(grpcSender.Responses, &CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
+					grpcSender.Responses = append(grpcSender.Responses, &common.CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
 				}
 			}
 			close(ch)
