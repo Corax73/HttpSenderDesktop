@@ -8,13 +8,14 @@ import (
 	goutilsCurl "github.com/Corax73/goUtils/curl"
 )
 
-type State struct {
-	Url, Params, Headers, Method, BasicAuthUsername, BasicAuthPassword, ResponseData string
-	Repeat, Delay, CookieDefaultExpiration                                           int
-	NotShowResult                                                                    bool
-	Cookies                                                                          []CookieInstance
-	UrlencodeData                                                                    []goutilsCurl.UrlencodeData
-	Responses                                                                        []*common.CustomResponse
+type httpState struct {
+	common.State
+	Url, Params, Headers, Method, BasicAuthUsername, BasicAuthPassword string
+	Repeat, Delay, CookieDefaultExpiration                             int
+	NotShowResult                                                      bool
+	Cookies                                                            []CookieInstance
+	UrlencodeData                                                      []goutilsCurl.UrlencodeData
+	Responses                                                          []*common.CustomResponse
 }
 
 type CookieInstance struct {
@@ -22,12 +23,12 @@ type CookieInstance struct {
 }
 
 type HttpSender struct {
-	State
-	stateHistory                                                                                                                   map[string]*State
-	UrlEntry, DisplayEntry, ParamsEntry, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry     *widget.Entry
+	common.Sender
+	httpState
+	stateHistory                                                                                                                   map[string]*httpState
+	UrlEntry, ParamsEntry, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry                   *widget.Entry
 	ScrollContainer                                                                                                                *container.Scroll
 	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn, SaveStateBtn, LoadStateBtn *widget.Button
-	DisplayRepeat                                                                                                                  *widget.Label
 	SelectMethod                                                                                                                   *widget.Select
 	NotShowResultCheckbox                                                                                                          *widget.Check
 	BasicAuthForm                                                                                                                  *widget.Form

@@ -17,19 +17,7 @@ import (
 	"golang.design/x/clipboard"
 )
 
-type GrpcSender struct {
-	state
-	UrlEntry, FullServiceNameEntry, DisplayEntry, ParamsEntry, RepeatEntry, DelayEntry *widget.Entry
-	ScrollContainer                                                                    *container.Scroll
-	ParseMethodsBtn, SendBtn, ClearResultBtn,
-	ClearParametersBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn,
-	SaveResultBtn *widget.Button
-	SelectMethod             *widget.Select
-	MethodDescriptionDisplay *widget.Label
-	NotShowResultCheckbox    *widget.Check
-}
-
-func (state *state) ResetState() {
+func (state *grpcState) ResetState() {
 	state.Url, state.FullServiceName, state.Params, state.Method, state.ResponseData = "", "", "", "", ""
 	state.MethodsDescription = make([]*methodDescription, 0)
 	state.NotShowResult = false
@@ -44,13 +32,13 @@ func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
 		grpcSender.Method = grpcSender.SelectMethod.Selected
 		if grpcSender.Url == "" || grpcSender.FullServiceName == "" {
 			errStr := "Check server and service name"
-			grpcSender.showResp(&errStr)
+			grpcSender.ShowResp(&errStr)
 			return
 		}
 		list, err := grpcSender.parseServerMethods()
 		if err != nil {
 			errStr := err.Error()
-			grpcSender.showResp(&errStr)
+			grpcSender.ShowResp(&errStr)
 			return
 		}
 		listLength := len(*list)
@@ -78,7 +66,7 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		grpcSender.Params = grpcSender.ParamsEntry.Text
 		if grpcSender.Url == "" || grpcSender.FullServiceName == "" || grpcSender.Method == "" || grpcSender.Params == "" {
 			errStr := "Check server, service name or method"
-			grpcSender.showResp(&errStr)
+			grpcSender.ShowResp(&errStr)
 			return
 		}
 
@@ -88,7 +76,7 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		conn, refClient, err := grpcSender.getGrpcClient(ctx)
 		if err != nil {
 			errStr := fmt.Errorf("Failed to connect to the server: %v", err).Error()
-			grpcSender.showResp(&errStr)
+			grpcSender.ShowResp(&errStr)
 			return
 		}
 		defer conn.Close()
@@ -163,10 +151,10 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 			}
 			bytesData, _ = json.MarshalIndent(grpcSender.Responses, "", " ")
 		}
-		grpcSender.ResponseData = string(bytesData)
+		grpcSender.SetResponseData(string(bytesData))
 		grpcSender.Responses = nil
 		if !grpcSender.NotShowResult {
-			grpcSender.showResp(&grpcSender.ResponseData)
+			grpcSender.ShowResp(grpcSender.GetResponseData())
 		}
 		grpcSender.switchingAvailability(true)
 	})
@@ -201,16 +189,12 @@ func (grpcSender *GrpcSender) GetSelectMethod() *widget.Select {
 	return resp
 }
 
-func (grpcSender *GrpcSender) showResp(data *string) {
-	grpcSender.DisplayEntry.SetText(*data)
-}
-
 func (grpcSender *GrpcSender) MethodDescriptionCopyBtnHandler() *widget.Button {
 	return widget.NewButton("Copy description to clipboard", func() {
 		err := clipboard.Init()
 		if err != nil {
 			errResp := err.Error()
-			grpcSender.showResp(&errResp)
+			grpcSender.ShowResp(&errResp)
 		}
 		clipboard.Write(clipboard.FmtText, []byte(grpcSender.MethodDescriptionDisplay.Text))
 	})
@@ -222,6 +206,7 @@ func (grpcSender *GrpcSender) ClearParametersBtnHandler() *widget.Button {
 		grpcSender.ParamsEntry.SetText("")
 		grpcSender.FullServiceNameEntry.SetText("")
 		grpcSender.MethodDescriptionDisplay.SetText("")
+		grpcSender.SelectMethod.Options = nil
 		grpcSender.SelectMethod.Selected = "Select method"
 		grpcSender.SelectMethod.Refresh()
 		grpcSender.DelayEntry.SetText("")
@@ -230,21 +215,14 @@ func (grpcSender *GrpcSender) ClearParametersBtnHandler() *widget.Button {
 	})
 }
 
-func (grpcSender *GrpcSender) ClearResultBtnHandler() *widget.Button {
-	return widget.NewButton("Clear result", func() {
-		grpcSender.DisplayEntry.SetText("")
-		grpcSender.ResponseData = ""
-	})
-}
-
 func (grpcSender *GrpcSender) ResultCopyBtnHandler() *widget.Button {
 	return widget.NewButton("Copy result to clipboard", func() {
 		err := clipboard.Init()
 		if err != nil {
 			errResp := err.Error()
-			grpcSender.showResp(&errResp)
+			grpcSender.ShowResp(&errResp)
 		}
-		clipboard.Write(clipboard.FmtText, []byte(grpcSender.ResponseData))
+		clipboard.Write(clipboard.FmtText, []byte(*grpcSender.GetResponseData()))
 	})
 }
 
@@ -252,7 +230,7 @@ func (grpcSender *GrpcSender) SaveResultBtnHandler(appWindow fyne.Window) *widge
 	return widget.NewButton("Save result to file", func() {
 		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err == nil && writer != nil {
-				_, err := writer.Write([]byte(grpcSender.ResponseData))
+				_, err := writer.Write([]byte(*grpcSender.GetResponseData()))
 				if err != nil {
 					dialog.ShowError(err, appWindow)
 				}

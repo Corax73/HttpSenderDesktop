@@ -2,6 +2,9 @@ package grpcSender
 
 import (
 	common "httpSenderDesktop/common/structs"
+
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 )
 
 type rpcResponseData struct {
@@ -21,10 +24,24 @@ type fieldDescription struct {
 	Type string `json:"type"`
 }
 
-type state struct {
-	Url, FullServiceName, Params, Method, ResponseData string
-	Repeat, Delay                                      int
-	MethodsDescription                                 []*methodDescription
-	Responses                                          []*common.CustomResponse
-	NotShowResult                                      bool
+type grpcState struct {
+	common.State
+	Url, FullServiceName, Params, Method string
+	Repeat, Delay                        int
+	MethodsDescription                   []*methodDescription
+	Responses                            []*common.CustomResponse
+	NotShowResult                        bool
+}
+
+type GrpcSender struct {
+	common.Sender
+	grpcState
+	UrlEntry, FullServiceNameEntry, ParamsEntry, RepeatEntry, DelayEntry *widget.Entry
+	ScrollContainer                                                      *container.Scroll
+	ParseMethodsBtn, SendBtn, ClearResultBtn,
+	ClearParametersBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn,
+	SaveResultBtn *widget.Button
+	SelectMethod             *widget.Select
+	MethodDescriptionDisplay *widget.Label
+	NotShowResultCheckbox    *widget.Check
 }

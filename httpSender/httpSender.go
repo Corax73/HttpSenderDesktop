@@ -22,8 +22,10 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func (state *State) ResetState() {
-	state.Url, state.Params, state.Headers, state.Method, state.BasicAuthUsername, state.BasicAuthPassword, state.ResponseData = "", "", "", "", "", "", ""
+func (state *httpState) ResetState() {
+	state.Url, state.Params, state.Headers,
+		state.Method, state.BasicAuthUsername,
+		state.BasicAuthPassword, state.ResponseData = "", "", "", "", "", "", ""
 	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
 	state.NotShowResult = false
 	state.Cookies = make([]CookieInstance, 0)
@@ -32,7 +34,7 @@ func (state *State) ResetState() {
 }
 
 func (httpSender *HttpSender) Load() {
-	httpSender.stateHistory = make(map[string]*State)
+	httpSender.stateHistory = make(map[string]*httpState)
 	httpSender.UrlEntry.OnChanged = func(content string) {
 		if strings.Contains(content, "curl") {
 			curlData := goutilsCurl.ParseCurlString(content)
@@ -142,17 +144,17 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 				}
 				bytesData, _ = json.MarshalIndent(httpSender.Responses, "", " ")
 			}
-			httpSender.ResponseData = string(bytesData)
+			httpSender.SetResponseData(string(bytesData))
 			httpSender.Responses = nil
 			if !httpSender.NotShowResult {
-				httpSender.showResp(&httpSender.ResponseData)
+				httpSender.ShowResp(httpSender.GetResponseData())
 			}
 			timeSpent := time.Since(start)
 			httpSender.showRepeat(1, true, &timeSpent)
 			httpSender.switchingAvailability(true)
 		} else {
 			defaultResp := "Enter the request string"
-			httpSender.showResp(&defaultResp)
+			httpSender.ShowResp(&defaultResp)
 		}
 	})
 }
@@ -193,10 +195,6 @@ func (httpSender *HttpSender) SendByMethod(client *http.Client, ch chan *HttpRes
 	ch <- &HttpResponseData{DataBytes: body, RepeatNumber: repeatNumber}
 }
 
-func (httpSender *HttpSender) showResp(data *string) {
-	httpSender.DisplayEntry.SetText(*data)
-}
-
 func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool, timeSpent *time.Duration) {
 	var strBuilder strings.Builder
 	if !isEnd {
@@ -235,7 +233,7 @@ func (httpSender *HttpSender) getParams() (*bytes.Buffer, error) {
 	err := json.Unmarshal([]byte(str), &data)
 	if err != nil {
 		errResp := err.Error()
-		httpSender.showResp(&errResp)
+		httpSender.ShowResp(&errResp)
 		return nil, err
 	}
 	postBody, err := json.Marshal(data)
@@ -264,21 +262,14 @@ func (httpSender *HttpSender) getDelay() {
 	}
 }
 
-func (httpSender *HttpSender) ClearResultBtnHandler() *widget.Button {
-	return widget.NewButton("Clear result", func() {
-		httpSender.DisplayEntry.SetText("")
-		httpSender.ResponseData = ""
-	})
-}
-
 func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
 	return widget.NewButton("Copy to clipboard", func() {
 		err := clipboard.Init()
 		if err != nil {
 			errResp := err.Error()
-			httpSender.showResp(&errResp)
+			httpSender.ShowResp(&errResp)
 		}
-		clipboard.Write(clipboard.FmtText, []byte(httpSender.ResponseData))
+		clipboard.Write(clipboard.FmtText, []byte(*httpSender.GetResponseData()))
 	})
 }
 
@@ -301,7 +292,7 @@ func (httpSender *HttpSender) SaveResultBtnHandler(appWindow fyne.Window) *widge
 	return widget.NewButton("Save result to file", func() {
 		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
 			if err == nil && writer != nil {
-				_, err := writer.Write([]byte(httpSender.ResponseData))
+				_, err := writer.Write([]byte(*httpSender.GetResponseData()))
 				if err != nil {
 					dialog.ShowError(err, appWindow)
 				}
@@ -501,14 +492,14 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 				if ok && titleEntry.Text != "" {
 					httpSender.getRepeat()
 					httpSender.getDelay()
-					httpSender.stateHistory[titleEntry.Text] = &State{
+					httpSender.stateHistory[titleEntry.Text] = &httpState{
+						common.State{ResponseData: ""},
 						httpSender.UrlEntry.Text,
 						httpSender.ParamsEntry.Text,
 						httpSender.HeadersEntry.Text,
 						httpSender.Method,
 						httpSender.BasicAuthUsernameEntry.Text,
 						httpSender.BasicAuthPasswordEntry.Text,
-						"",
 						httpSender.Repeat,
 						httpSender.Delay,
 						httpSender.CookieDefaultExpiration,
