@@ -10,12 +10,11 @@ import (
 
 type httpState struct {
 	common.State
-	Url, Params, Headers, Method, BasicAuthUsername, BasicAuthPassword string
-	Repeat, Delay, CookieDefaultExpiration                             int
-	NotShowResult                                                      bool
-	Cookies                                                            []CookieInstance
-	UrlencodeData                                                      []goutilsCurl.UrlencodeData
-	Responses                                                          []*common.CustomResponse
+	Headers, BasicAuthUsername, BasicAuthPassword string
+	CookieDefaultExpiration                       int
+	Cookies                                       []CookieInstance
+	UrlencodeData                                 []goutilsCurl.UrlencodeData
+	Responses                                     []*common.CustomResponse
 }
 
 type CookieInstance struct {
@@ -25,13 +24,13 @@ type CookieInstance struct {
 type HttpSender struct {
 	common.Sender
 	httpState
-	stateHistory                                                                                                                   map[string]*httpState
-	UrlEntry, ParamsEntry, RepeatEntry, DelayEntry, BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry                   *widget.Entry
-	ScrollContainer                                                                                                                *container.Scroll
-	SendBtn, ClearResultBtn, CopyBtn, ClearParametersBtn, SaveResultBtn, SetBasicAuthBtn, SetCookieBtn, SaveStateBtn, LoadStateBtn *widget.Button
-	SelectMethod                                                                                                                   *widget.Select
-	NotShowResultCheckbox                                                                                                          *widget.Check
-	BasicAuthForm                                                                                                                  *widget.Form
+	stateHistory                                                 map[string]*httpState
+	BasicAuthUsernameEntry, BasicAuthPasswordEntry, HeadersEntry *widget.Entry
+	ScrollContainer                                              *container.Scroll
+	CopyBtn, SetBasicAuthBtn, SetCookieBtn                       *widget.Button
+	SelectMethod                                                 *widget.Select
+	NotShowResultCheckbox                                        *widget.Check
+	BasicAuthForm                                                *widget.Form
 }
 
 type HttpResponseData struct {

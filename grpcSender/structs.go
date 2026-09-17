@@ -26,22 +26,18 @@ type fieldDescription struct {
 
 type grpcState struct {
 	common.State
-	Url, FullServiceName, Params, Method string
-	Repeat, Delay                        int
-	MethodsDescription                   []*methodDescription
-	Responses                            []*common.CustomResponse
-	NotShowResult                        bool
+	FullServiceName    string
+	MethodsDescription []*methodDescription
+	Responses          []*common.CustomResponse
 }
 
 type GrpcSender struct {
 	common.Sender
 	grpcState
-	UrlEntry, FullServiceNameEntry, ParamsEntry, RepeatEntry, DelayEntry *widget.Entry
-	ScrollContainer                                                      *container.Scroll
-	ParseMethodsBtn, SendBtn, ClearResultBtn,
-	ClearParametersBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn,
-	SaveResultBtn *widget.Button
-	SelectMethod             *widget.Select
-	MethodDescriptionDisplay *widget.Label
-	NotShowResultCheckbox    *widget.Check
+	FullServiceNameEntry                                               *widget.Entry
+	ScrollContainer                                                    *container.Scroll
+	ParseMethodsBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn *widget.Button
+	SelectMethod                                                       *widget.Select
+	MethodDescriptionDisplay                                           *widget.Label
+	NotShowResultCheckbox                                              *widget.Check
 }

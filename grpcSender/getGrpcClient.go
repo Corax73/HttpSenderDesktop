@@ -10,7 +10,7 @@ import (
 )
 
 func (grpcSender *GrpcSender) getGrpcClient(ctx context.Context) (conn *grpc.ClientConn, client *grpcreflect.Client, err error) {
-	conn, err = grpc.NewClient(grpcSender.Url, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err = grpc.NewClient(*grpcSender.GetUrl(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err
 	}

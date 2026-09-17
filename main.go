@@ -21,15 +21,15 @@ func main() {
 	})
 
 	httpSender := httpSender.HttpSender{
-		UrlEntry:               widget.NewEntry(),
-		ParamsEntry:            widget.NewEntry(),
-		RepeatEntry:            widget.NewEntry(),
-		DelayEntry:             widget.NewEntry(),
 		BasicAuthUsernameEntry: widget.NewEntry(),
 		BasicAuthPasswordEntry: widget.NewPasswordEntry(),
 		HeadersEntry:           widget.NewEntry(),
 	}
 	httpSender.DisplayEntry = widget.NewEntry()
+	httpSender.UrlEntry = widget.NewEntry()
+	httpSender.ParamsEntry = widget.NewEntry()
+	httpSender.RepeatEntry = widget.NewEntry()
+	httpSender.DelayEntry = widget.NewEntry()
 	httpSender.DisplayRepeat = widget.NewLabel("Repeat №")
 	httpSender.ResetState()
 	httpSender.ParamsEntry.MultiLine = true
@@ -104,14 +104,14 @@ func main() {
 	)
 
 	grpcSender := grpcSender.GrpcSender{
-		UrlEntry:                 widget.NewEntry(),
 		FullServiceNameEntry:     widget.NewEntry(),
-		ParamsEntry:              widget.NewEntry(),
 		MethodDescriptionDisplay: widget.NewLabel("Description of method request parameters"),
-		DelayEntry:               widget.NewEntry(),
-		RepeatEntry:              widget.NewEntry(),
 	}
 	grpcSender.DisplayEntry = widget.NewEntry()
+	grpcSender.UrlEntry = widget.NewEntry()
+	grpcSender.ParamsEntry = widget.NewEntry()
+	grpcSender.RepeatEntry = widget.NewEntry()
+	grpcSender.DelayEntry = widget.NewEntry()
 	grpcSender.DisplayRepeat = widget.NewLabel("Repeat №")
 	grpcSender.ResetState()
 	grpcSender.ParamsEntry.MultiLine = true

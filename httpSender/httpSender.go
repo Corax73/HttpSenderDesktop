@@ -22,15 +22,19 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-func (state *httpState) ResetState() {
-	state.Url, state.Params, state.Headers,
-		state.Method, state.BasicAuthUsername,
-		state.BasicAuthPassword, state.ResponseData = "", "", "", "", "", "", ""
-	state.Repeat, state.Delay, state.CookieDefaultExpiration = 1, 200, 1
-	state.NotShowResult = false
-	state.Cookies = make([]CookieInstance, 0)
-	state.UrlencodeData = make([]goutilsCurl.UrlencodeData, 0)
-	state.Responses = make([]*common.CustomResponse, 0)
+func (httpSender *HttpSender) ResetState() {
+	httpSender.Headers, httpSender.BasicAuthUsername, httpSender.BasicAuthPassword = "", "", ""
+	httpSender.CookieDefaultExpiration = 1
+	httpSender.SetUrl("")
+	httpSender.SetParams("")
+	httpSender.SetMethod("")
+	httpSender.SetResponseData("")
+	httpSender.SetRepeat(1)
+	httpSender.SetDelay(1)
+	httpSender.SetNotShowResult(false)
+	httpSender.Cookies = make([]CookieInstance, 0)
+	httpSender.UrlencodeData = make([]goutilsCurl.UrlencodeData, 0)
+	httpSender.Responses = make([]*common.CustomResponse, 0)
 }
 
 func (httpSender *HttpSender) Load() {
@@ -64,35 +68,35 @@ func (httpSender *HttpSender) Load() {
 
 func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 	return widget.NewButton("Send", func() {
-		if httpSender.UrlEntry.Text != "" && httpSender.Method != "" {
-			httpSender.getRepeat()
-			httpSender.Url = httpSender.UrlEntry.Text
-			httpSender.Params = httpSender.ParamsEntry.Text
+		if httpSender.UrlEntry.Text != "" && *httpSender.GetMethod() != "" {
+			httpSender.ParseRepeat()
+			httpSender.SetUrl(httpSender.UrlEntry.Text)
+			httpSender.SetParams(httpSender.ParamsEntry.Text)
 			httpSender.Headers = httpSender.HeadersEntry.Text
 			httpSender.DisplayEntry.SetText("")
-			repetitionChans := make([]chan *HttpResponseData, httpSender.Repeat)
-			for i := 0; i < httpSender.Repeat; i++ {
+			repetitionChans := make([]chan *HttpResponseData, httpSender.GetRepeat())
+			for i := 0; i < httpSender.GetRepeat(); i++ {
 				repetitionChans[i] = make(chan *HttpResponseData, 1)
 			}
 			client := &http.Client{
 				Timeout: 30 * time.Second,
 				Transport: &http.Transport{
-					MaxIdleConnsPerHost: httpSender.Repeat,
+					MaxIdleConnsPerHost: httpSender.GetRepeat(),
 				},
 			}
 			var wg sync.WaitGroup
 			defer wg.Wait()
 			start := time.Now()
 			httpSender.switchingAvailability(false)
-			httpSender.getDelay()
-			for i := 0; i < httpSender.Repeat; i++ {
+			httpSender.ParseDelay()
+			for i := 0; i < httpSender.GetRepeat(); i++ {
 				wg.Add(1)
 				go func(counter int) {
 					defer wg.Done()
 					httpSender.SendByMethod(client, repetitionChans[counter], counter+1)
 				}(i)
-				if httpSender.Repeat > 1 {
-					time.Sleep(time.Duration(httpSender.Delay) * time.Millisecond)
+				if httpSender.GetRepeat() > 1 {
+					time.Sleep(time.Duration(httpSender.GetDelay()) * time.Millisecond)
 				}
 			}
 			httpSender.DisplayEntry.SetPlaceHolder("Reading responses to requests...")
@@ -146,7 +150,7 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 			}
 			httpSender.SetResponseData(string(bytesData))
 			httpSender.Responses = nil
-			if !httpSender.NotShowResult {
+			if !httpSender.GetNotShowResult() {
 				httpSender.ShowResp(httpSender.GetResponseData())
 			}
 			timeSpent := time.Since(start)
@@ -165,7 +169,7 @@ func (httpSender *HttpSender) SendByMethod(client *http.Client, ch chan *HttpRes
 		ch <- &HttpResponseData{Error: err, RepeatNumber: repeatNumber}
 		return
 	}
-	req, err := http.NewRequest(httpSender.Method, httpSender.UrlEntry.Text, jsonData)
+	req, err := http.NewRequest(*httpSender.GetMethod(), httpSender.UrlEntry.Text, jsonData)
 	if err != nil {
 		ch <- &HttpResponseData{Error: err, RepeatNumber: repeatNumber}
 		return
@@ -218,7 +222,7 @@ func (httpSender *HttpSender) GetScrollDisplay() *container.Scroll {
 
 func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
 	resp := widget.NewSelect([]string{"GET", "POST", "DELETE", "PUT"}, func(value string) {
-		httpSender.Method = value
+		httpSender.SetMethod(value)
 	})
 	resp.PlaceHolder = "Select method"
 	return resp
@@ -242,24 +246,6 @@ func (httpSender *HttpSender) getParams() (*bytes.Buffer, error) {
 	}
 	responseBody := bytes.NewBuffer(postBody)
 	return responseBody, nil
-}
-
-func (httpSender *HttpSender) getRepeat() {
-	if httpSender.RepeatEntry.Text != "" {
-		number, err := strconv.Atoi(httpSender.RepeatEntry.Text)
-		if err == nil {
-			httpSender.Repeat = number
-		}
-	}
-}
-
-func (httpSender *HttpSender) getDelay() {
-	if httpSender.DelayEntry.Text != "" {
-		number, err := strconv.Atoi(httpSender.DelayEntry.Text)
-		if err == nil {
-			httpSender.Delay = number
-		}
-	}
 }
 
 func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
@@ -288,22 +274,9 @@ func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
 	})
 }
 
-func (httpSender *HttpSender) SaveResultBtnHandler(appWindow fyne.Window) *widget.Button {
-	return widget.NewButton("Save result to file", func() {
-		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
-			if err == nil && writer != nil {
-				_, err := writer.Write([]byte(*httpSender.GetResponseData()))
-				if err != nil {
-					dialog.ShowError(err, appWindow)
-				}
-			}
-		}, appWindow)
-	})
-}
-
 func (httpSender *HttpSender) NotShowResultCheckboxHandler() *widget.Check {
 	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
-		httpSender.NotShowResult = value
+		httpSender.SetNotShowResult(value)
 	})
 }
 
@@ -490,20 +463,22 @@ func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget
 			dialogContent,
 			func(ok bool) {
 				if ok && titleEntry.Text != "" {
-					httpSender.getRepeat()
-					httpSender.getDelay()
+					httpSender.ParseRepeat()
+					httpSender.ParseDelay()
 					httpSender.stateHistory[titleEntry.Text] = &httpState{
-						common.State{ResponseData: ""},
-						httpSender.UrlEntry.Text,
-						httpSender.ParamsEntry.Text,
+						common.State{
+							Url:           httpSender.UrlEntry.Text,
+							Params:        httpSender.ParamsEntry.Text,
+							Method:        *httpSender.GetMethod(),
+							ResponseData:  "",
+							Repeat:        httpSender.GetRepeat(),
+							Delay:         httpSender.GetDelay(),
+							NotShowResult: httpSender.GetNotShowResult(),
+						},
 						httpSender.HeadersEntry.Text,
-						httpSender.Method,
 						httpSender.BasicAuthUsernameEntry.Text,
 						httpSender.BasicAuthPasswordEntry.Text,
-						httpSender.Repeat,
-						httpSender.Delay,
 						httpSender.CookieDefaultExpiration,
-						httpSender.NotShowResult,
 						httpSender.Cookies,
 						httpSender.UrlencodeData,
 						httpSender.Responses,

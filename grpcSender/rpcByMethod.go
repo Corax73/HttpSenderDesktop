@@ -25,9 +25,9 @@ func (grpcSender *GrpcSender) executeRpcMethod(
 		return
 	}
 
-	methodDesc := serviceDesc.FindMethodByName(grpcSender.Method)
+	methodDesc := serviceDesc.FindMethodByName(*grpcSender.GetMethod())
 	if methodDesc == nil {
-		response.Error = fmt.Errorf("Method %s not found in the service %s", grpcSender.Method, grpcSender.FullServiceName)
+		response.Error = fmt.Errorf("Method %s not found in the service %s", *grpcSender.GetMethod(), grpcSender.FullServiceName)
 		ch <- response
 		return
 	}
@@ -35,7 +35,7 @@ func (grpcSender *GrpcSender) executeRpcMethod(
 	inputMsgDesc := methodDesc.GetInputType()
 	dynamicInputMsg := dynamic.NewMessage(inputMsgDesc)
 
-	err = dynamicInputMsg.UnmarshalJSON([]byte(grpcSender.Params))
+	err = dynamicInputMsg.UnmarshalJSON([]byte(*grpcSender.GetParams()))
 	if err != nil {
 		response.Error = fmt.Errorf("Error parsing input JSON: %v", err)
 		ch <- response
@@ -46,7 +46,7 @@ func (grpcSender *GrpcSender) executeRpcMethod(
 	dynamicOutputMsg := dynamic.NewMessage(outputMsgDesc)
 
 	err = conn.Invoke(ctx,
-		fmt.Sprintf("/%s/%s", grpcSender.FullServiceName, grpcSender.Method),
+		fmt.Sprintf("/%s/%s", grpcSender.FullServiceName, *grpcSender.GetMethod()),
 		dynamicInputMsg,
 		dynamicOutputMsg,
 	)

@@ -5,32 +5,34 @@ import (
 	"encoding/json"
 	"fmt"
 	common "httpSenderDesktop/common/structs"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 	"golang.design/x/clipboard"
 )
 
-func (state *grpcState) ResetState() {
-	state.Url, state.FullServiceName, state.Params, state.Method, state.ResponseData = "", "", "", "", ""
-	state.MethodsDescription = make([]*methodDescription, 0)
-	state.NotShowResult = false
-	state.Repeat, state.Delay = 1, 200
-	state.Responses = make([]*common.CustomResponse, 0)
+func (grpcSender *GrpcSender) ResetState() {
+	grpcSender.FullServiceName = ""
+	grpcSender.SetUrl("")
+	grpcSender.SetParams("")
+	grpcSender.SetMethod("")
+	grpcSender.MethodsDescription = make([]*methodDescription, 0)
+	grpcSender.SetNotShowResult(false)
+	grpcSender.SetResponseData("")
+	grpcSender.SetRepeat(1)
+	grpcSender.SetDelay(1)
+	grpcSender.Responses = make([]*common.CustomResponse, 0)
 }
 
 func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
 	return widget.NewButton("Parse methods", func() {
-		grpcSender.Url = grpcSender.UrlEntry.Text
+		grpcSender.SetUrl(grpcSender.UrlEntry.Text)
 		grpcSender.FullServiceName = grpcSender.FullServiceNameEntry.Text
-		grpcSender.Method = grpcSender.SelectMethod.Selected
-		if grpcSender.Url == "" || grpcSender.FullServiceName == "" {
+		grpcSender.SetMethod(grpcSender.SelectMethod.Selected)
+		if *grpcSender.GetUrl() == "" || grpcSender.FullServiceName == "" {
 			errStr := "Check server and service name"
 			grpcSender.ShowResp(&errStr)
 			return
@@ -63,8 +65,8 @@ func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
 
 func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 	return widget.NewButton("Send", func() {
-		grpcSender.Params = grpcSender.ParamsEntry.Text
-		if grpcSender.Url == "" || grpcSender.FullServiceName == "" || grpcSender.Method == "" || grpcSender.Params == "" {
+		grpcSender.SetParams(grpcSender.ParamsEntry.Text)
+		if *grpcSender.GetUrl() == "" || grpcSender.FullServiceName == "" || *grpcSender.GetMethod() == "" || *grpcSender.GetParams() == "" {
 			errStr := "Check server, service name or method"
 			grpcSender.ShowResp(&errStr)
 			return
@@ -82,16 +84,16 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		defer conn.Close()
 		defer refClient.Reset()
 
-		grpcSender.getRepeat()
-		repetitionChans := make([]chan *rpcResponseData, grpcSender.Repeat)
-		for i := 0; i < grpcSender.Repeat; i++ {
+		grpcSender.ParseRepeat()
+		repetitionChans := make([]chan *rpcResponseData, grpcSender.GetRepeat())
+		for i := 0; i < grpcSender.GetRepeat(); i++ {
 			repetitionChans[i] = make(chan *rpcResponseData, 1)
 		}
 		var wg sync.WaitGroup
 		defer wg.Wait()
 		grpcSender.switchingAvailability(false)
-		grpcSender.getDelay()
-		for i := 0; i < grpcSender.Repeat; i++ {
+		grpcSender.ParseDelay()
+		for i := 0; i < grpcSender.GetRepeat(); i++ {
 			wg.Add(1)
 			go func(counter int) {
 				defer wg.Done()
@@ -99,8 +101,8 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 				defer reqCancel()
 				grpcSender.executeRpcMethod(reqCtx, conn, refClient, repetitionChans[counter], counter+1)
 			}(i)
-			if grpcSender.Repeat > 1 {
-				time.Sleep(time.Duration(grpcSender.Delay) * time.Millisecond)
+			if grpcSender.GetRepeat() > 1 {
+				time.Sleep(time.Duration(grpcSender.GetDelay()) * time.Millisecond)
 			}
 		}
 		grpcSender.DisplayEntry.SetPlaceHolder("Reading responses to requests...")
@@ -153,7 +155,7 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		}
 		grpcSender.SetResponseData(string(bytesData))
 		grpcSender.Responses = nil
-		if !grpcSender.NotShowResult {
+		if !grpcSender.GetNotShowResult() {
 			grpcSender.ShowResp(grpcSender.GetResponseData())
 		}
 		grpcSender.switchingAvailability(true)
@@ -169,7 +171,7 @@ func (grpcSender *GrpcSender) GetScrollDisplay() *container.Scroll {
 
 func (grpcSender *GrpcSender) GetSelectMethod() *widget.Select {
 	resp := widget.NewSelect([]string{}, func(value string) {
-		grpcSender.Method = value
+		grpcSender.SetMethod(value)
 		if len(grpcSender.MethodsDescription) > 0 {
 			for _, v := range grpcSender.MethodsDescription {
 				if v.MethodName == value {
@@ -226,41 +228,10 @@ func (grpcSender *GrpcSender) ResultCopyBtnHandler() *widget.Button {
 	})
 }
 
-func (grpcSender *GrpcSender) SaveResultBtnHandler(appWindow fyne.Window) *widget.Button {
-	return widget.NewButton("Save result to file", func() {
-		dialog.ShowFileSave(func(writer fyne.URIWriteCloser, err error) {
-			if err == nil && writer != nil {
-				_, err := writer.Write([]byte(*grpcSender.GetResponseData()))
-				if err != nil {
-					dialog.ShowError(err, appWindow)
-				}
-			}
-		}, appWindow)
-	})
-}
-
 func (grpcSender *GrpcSender) NotShowResultCheckboxHandler() *widget.Check {
 	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
-		grpcSender.NotShowResult = value
+		grpcSender.SetNotShowResult(value)
 	})
-}
-
-func (grpcSender *GrpcSender) getRepeat() {
-	if grpcSender.RepeatEntry.Text != "" {
-		number, err := strconv.Atoi(grpcSender.RepeatEntry.Text)
-		if err == nil {
-			grpcSender.Repeat = number
-		}
-	}
-}
-
-func (grpcSender *GrpcSender) getDelay() {
-	if grpcSender.DelayEntry.Text != "" {
-		number, err := strconv.Atoi(grpcSender.DelayEntry.Text)
-		if err == nil {
-			grpcSender.Delay = number
-		}
-	}
 }
 
 func (grpcSender *GrpcSender) switchingAvailability(isOn bool) {
