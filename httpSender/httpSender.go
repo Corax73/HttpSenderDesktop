@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	common "httpSenderDesktop/common/structs"
+	common "httpSenderDesktop/common/sender"
 	"io"
 	"net/http"
 	"strconv"
@@ -30,11 +30,11 @@ func (httpSender *HttpSender) ResetState() {
 	httpSender.SetMethod("")
 	httpSender.SetResponseData("")
 	httpSender.SetRepeat(1)
-	httpSender.SetDelay(1)
+	httpSender.SetDelay(200)
 	httpSender.SetNotShowResult(false)
 	httpSender.Cookies = make([]CookieInstance, 0)
 	httpSender.UrlencodeData = make([]goutilsCurl.UrlencodeData, 0)
-	httpSender.Responses = make([]*common.CustomResponse, 0)
+	httpSender.SetResponses(make([]*common.CustomResponse, 0))
 }
 
 func (httpSender *HttpSender) Load() {
@@ -104,22 +104,25 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 				httpSender.showRepeat(i+1, false, nil)
 				resp := <-ch
 				if json.Valid(resp.DataBytes) {
-					httpSender.Responses = append(httpSender.Responses,
-						&common.CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
-					)
+					httpSender.SetResponses(
+						append(
+							httpSender.GetResponses(),
+							&common.CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
+						))
 				} else {
 					if resp.Error != nil {
-						httpSender.Responses = append(
-							httpSender.Responses,
-							&common.CustomResponse{
-								Data: json.RawMessage(
-									strings.ReplaceAll(
-										strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
-										":", " "),
-								),
-								RepeatNumber: resp.RepeatNumber,
-							},
-						)
+						httpSender.SetResponses(
+							append(
+								httpSender.GetResponses(),
+								&common.CustomResponse{
+									Data: json.RawMessage(
+										strings.ReplaceAll(
+											strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
+											":", " "),
+									),
+									RepeatNumber: resp.RepeatNumber,
+								},
+							))
 					} else {
 						errMsg := fmt.Sprintf(
 							`{"error": "Invalid JSON response", "body": %q}`,
@@ -127,16 +130,20 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 								strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(resp.DataBytes), `"`, ""), "\r", ""), "\n", ""),
 								":", " "),
 						)
-						httpSender.Responses = append(httpSender.Responses, &common.CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
+						httpSender.SetResponses(
+							append(
+								httpSender.GetResponses(),
+								&common.CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber},
+							))
 					}
 				}
 				close(ch)
 			}
 			httpSender.DisplayEntry.SetPlaceHolder("")
 			repetitionChans = nil
-			bytesData, err := json.MarshalIndent(httpSender.Responses, "", " ")
+			bytesData, err := json.MarshalIndent(httpSender.GetResponses(), "", " ")
 			if err != nil {
-				for _, item := range httpSender.Responses {
+				for _, item := range httpSender.GetResponses() {
 					if len(item.Data) == 0 {
 						item.Data = json.RawMessage(`{"error": "Empty response"}`)
 						continue
@@ -146,10 +153,10 @@ func (httpSender *HttpSender) SendBtnHandler() *widget.Button {
 						item.Data = json.RawMessage(fmt.Sprintf(`"error": "%s"`, string(item.Data)))
 					}
 				}
-				bytesData, _ = json.MarshalIndent(httpSender.Responses, "", " ")
+				bytesData, _ = json.MarshalIndent(httpSender.GetResponses(), "", " ")
 			}
 			httpSender.SetResponseData(string(bytesData))
-			httpSender.Responses = nil
+			httpSender.SetResponses(nil)
 			if !httpSender.GetNotShowResult() {
 				httpSender.ShowResp(httpSender.GetResponseData())
 			}
@@ -445,87 +452,40 @@ func (httpSender *HttpSender) setHeadersCookiesAndAuth(req *http.Request) (err e
 	return
 }
 
-func (httpSender *HttpSender) SaveStateBtnHandler(appWindow fyne.Window) *widget.Button {
-	return widget.NewButton("Save state for reuse", func() {
-		stateTitleForm := widget.NewForm()
-		titleEntry := widget.NewEntry()
-		stateTitleForm.Append("State title", titleEntry)
-		dialogContent := container.NewScroll(
-			container.NewVBox(
-				stateTitleForm,
-			),
-		)
-
-		dlg := dialog.NewCustomConfirm(
-			"Set title for this state",
-			"Submit",
-			"Cancel",
-			dialogContent,
-			func(ok bool) {
-				if ok && titleEntry.Text != "" {
-					httpSender.ParseRepeat()
-					httpSender.ParseDelay()
-					httpSender.stateHistory[titleEntry.Text] = &httpState{
-						common.State{
-							Url:           httpSender.UrlEntry.Text,
-							Params:        httpSender.ParamsEntry.Text,
-							Method:        *httpSender.GetMethod(),
-							ResponseData:  "",
-							Repeat:        httpSender.GetRepeat(),
-							Delay:         httpSender.GetDelay(),
-							NotShowResult: httpSender.GetNotShowResult(),
-						},
-						httpSender.HeadersEntry.Text,
-						httpSender.BasicAuthUsernameEntry.Text,
-						httpSender.BasicAuthPasswordEntry.Text,
-						httpSender.CookieDefaultExpiration,
-						httpSender.Cookies,
-						httpSender.UrlencodeData,
-						httpSender.Responses,
-					}
-				}
+func (httpSender *HttpSender) SaveState(title string) {
+	if title != "" {
+		httpSender.ParseRepeat()
+		httpSender.ParseDelay()
+		httpSender.stateHistory[title] = &httpState{
+			common.State{
+				Url:           httpSender.UrlEntry.Text,
+				Params:        httpSender.ParamsEntry.Text,
+				Method:        *httpSender.GetMethod(),
+				ResponseData:  "",
+				Repeat:        httpSender.GetRepeat(),
+				Delay:         httpSender.GetDelay(),
+				NotShowResult: httpSender.GetNotShowResult(),
+				Responses:     httpSender.GetResponses(),
 			},
-			appWindow,
-		)
-
-		dlg.Resize(fyne.NewSize(300, 170))
-		dlg.Show()
-	})
-}
-
-func (httpSender *HttpSender) LoadStateBtnHandler(appWindow fyne.Window) *widget.Button {
-	return widget.NewButton("Load state for reuse", func() {
-		var keys []string
-		for k := range httpSender.stateHistory {
-			keys = append(keys, k)
+			httpSender.HeadersEntry.Text,
+			httpSender.BasicAuthUsernameEntry.Text,
+			httpSender.BasicAuthPasswordEntry.Text,
+			httpSender.CookieDefaultExpiration,
+			httpSender.Cookies,
+			httpSender.UrlencodeData,
 		}
-
-		selectWidget := widget.NewSelect(keys, func(value string) {})
-
-		dialogContent := container.NewScroll(
-			container.NewVBox(
-				selectWidget,
-			),
-		)
-		dlg := dialog.NewCustomConfirm(
-			"Set title for this state",
-			"Submit",
-			"Cancel",
-			dialogContent,
-			func(ok bool) {
-				if ok {
-					httpSender.useStateByTitle(selectWidget.Selected)
-				}
-			},
-			appWindow,
-		)
-
-		dlg.Resize(fyne.NewSize(300, 170))
-		dlg.Show()
-	})
+	}
 }
 
-func (httpSender *HttpSender) useStateByTitle(title string) {
+func (httpSender *HttpSender) GetStatesSelect() *widget.Select {
+	var keys []string
+	for k := range httpSender.stateHistory {
+		keys = append(keys, k)
+	}
+	return widget.NewSelect(keys, func(value string) {})
+}
+
+func (httpSender *HttpSender) UseStateByTitle(title string) {
 	state, ok := httpSender.stateHistory[title]
 	if ok {
 		httpSender.UrlEntry.SetText(state.Url)
@@ -539,7 +499,7 @@ func (httpSender *HttpSender) useStateByTitle(title string) {
 		httpSender.NotShowResultCheckbox.SetChecked(state.NotShowResult)
 		httpSender.Cookies = state.Cookies
 		httpSender.UrlencodeData = state.UrlencodeData
-		httpSender.Responses = state.Responses
+		httpSender.SetResponses(state.Responses)
 	}
 }
 

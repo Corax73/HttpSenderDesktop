@@ -1,7 +1,7 @@
 package grpcSender
 
 import (
-	common "httpSenderDesktop/common/structs"
+	common "httpSenderDesktop/common/sender"
 
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
@@ -28,12 +28,12 @@ type grpcState struct {
 	common.State
 	FullServiceName    string
 	MethodsDescription []*methodDescription
-	Responses          []*common.CustomResponse
 }
 
 type GrpcSender struct {
 	common.Sender
 	grpcState
+	stateHistory                                                       map[string]*grpcState
 	FullServiceNameEntry                                               *widget.Entry
 	ScrollContainer                                                    *container.Scroll
 	ParseMethodsBtn, CopyMethodDescriptionBtn, ResultCopyBtnHandlerBtn *widget.Button

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
@@ -14,17 +15,26 @@ type CustomResponse struct {
 	RepeatNumber int             `json:"repeat_number"`
 }
 
-type State struct {
-	Url, Params, Method, ResponseData string
-	Repeat, Delay                     int
-	NotShowResult                     bool
-}
-
 type Sender struct {
+	CustomSender CustomSender
 	State
 	DisplayEntry, UrlEntry, ParamsEntry, RepeatEntry, DelayEntry                           *widget.Entry
 	DisplayRepeat                                                                          *widget.Label
 	SendBtn, ClearResultBtn, ClearParametersBtn, SaveResultBtn, SaveStateBtn, LoadStateBtn *widget.Button
+}
+
+type CustomSender interface {
+	SaveState(title string)
+	GetStatesSelect() *widget.Select
+	UseStateByTitle(title string)
+}
+
+func (sender *Sender) GetResponses() []*CustomResponse {
+	return sender.Responses
+}
+
+func (sender *Sender) SetResponses(val []*CustomResponse) {
+	sender.Responses = val
 }
 
 func (sender *Sender) GetUrl() *string {
@@ -123,4 +133,61 @@ func (sender *Sender) ParseDelay() {
 
 func (sender *Sender) ShowResp(data *string) {
 	sender.DisplayEntry.SetText(*data)
+}
+
+func (sender *Sender) SaveStateBtnHandler(appWindow fyne.Window) *widget.Button {
+	return widget.NewButton("Save state for reuse", func() {
+		stateTitleForm := widget.NewForm()
+		titleEntry := widget.NewEntry()
+		stateTitleForm.Append("State title", titleEntry)
+		dialogContent := container.NewScroll(
+			container.NewVBox(
+				stateTitleForm,
+			),
+		)
+
+		dlg := dialog.NewCustomConfirm(
+			"Set title for this state",
+			"Submit",
+			"Cancel",
+			dialogContent,
+			func(ok bool) {
+				if ok && titleEntry.Text != "" {
+					sender.CustomSender.SaveState(titleEntry.Text)
+				}
+			},
+			appWindow,
+		)
+
+		dlg.Resize(fyne.NewSize(300, 170))
+		dlg.Show()
+	})
+}
+
+func (sender *Sender) LoadStateBtnHandler(appWindow fyne.Window) *widget.Button {
+	return widget.NewButton("Load state for reuse", func() {
+
+		selectWidget := sender.CustomSender.GetStatesSelect()
+
+		dialogContent := container.NewScroll(
+			container.NewVBox(
+				selectWidget,
+			),
+		)
+		dlg := dialog.NewCustomConfirm(
+			"Set title for this state",
+			"Submit",
+			"Cancel",
+			dialogContent,
+			func(ok bool) {
+				if ok {
+					sender.CustomSender.UseStateByTitle(selectWidget.Selected)
+				}
+			},
+			appWindow,
+		)
+
+		dlg.Resize(fyne.NewSize(300, 170))
+		dlg.Show()
+	})
 }

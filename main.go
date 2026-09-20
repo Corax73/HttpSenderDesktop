@@ -53,6 +53,7 @@ func main() {
 	httpSender.SaveStateBtn = httpSender.SaveStateBtnHandler(window)
 	httpSender.LoadStateBtn = httpSender.LoadStateBtnHandler(window)
 	httpSender.Load()
+	httpSender.Sender.CustomSender = &httpSender
 
 	httpTab := container.NewGridWithColumns(
 		1,
@@ -130,6 +131,10 @@ func main() {
 	grpcSender.NotShowResultCheckbox = grpcSender.NotShowResultCheckboxHandler()
 	grpcSender.RepeatEntry.SetPlaceHolder("Enter the number of repetitions, default is 1")
 	grpcSender.DelayEntry.SetPlaceHolder("Enter delay, default is 200 milliseconds")
+	grpcSender.SaveStateBtn = grpcSender.SaveStateBtnHandler(window)
+	grpcSender.LoadStateBtn = grpcSender.LoadStateBtnHandler(window)
+	grpcSender.Load()
+	grpcSender.Sender.CustomSender = &grpcSender
 
 	grpcTab := container.NewGridWithColumns(
 		1,
@@ -156,6 +161,8 @@ func main() {
 				container.NewVBox(
 					grpcSender.ParseMethodsBtn,
 					grpcSender.ClearParametersBtn,
+					grpcSender.SaveStateBtn,
+					grpcSender.LoadStateBtn,
 					grpcSender.ResultCopyBtnHandlerBtn,
 					grpcSender.SaveResultBtn,
 					grpcSender.ClearResultBtn,

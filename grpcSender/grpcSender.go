@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	common "httpSenderDesktop/common/structs"
+	common "httpSenderDesktop/common/sender"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -19,12 +20,11 @@ func (grpcSender *GrpcSender) ResetState() {
 	grpcSender.SetUrl("")
 	grpcSender.SetParams("")
 	grpcSender.SetMethod("")
-	grpcSender.MethodsDescription = make([]*methodDescription, 0)
 	grpcSender.SetNotShowResult(false)
 	grpcSender.SetResponseData("")
 	grpcSender.SetRepeat(1)
-	grpcSender.SetDelay(1)
-	grpcSender.Responses = make([]*common.CustomResponse, 0)
+	grpcSender.SetDelay(200)
+	grpcSender.SetResponses(make([]*common.CustomResponse, 0))
 }
 
 func (grpcSender *GrpcSender) ParseMethodsBtnHandler() *widget.Button {
@@ -109,22 +109,25 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 		for _, ch := range repetitionChans {
 			resp := <-ch
 			if json.Valid(resp.DataBytes) {
-				grpcSender.Responses = append(grpcSender.Responses,
-					&common.CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
-				)
+				grpcSender.SetResponses(
+					append(
+						grpcSender.GetResponses(),
+						&common.CustomResponse{Data: json.RawMessage(resp.DataBytes), RepeatNumber: resp.RepeatNumber},
+					))
 			} else {
 				if resp.Error != nil {
-					grpcSender.Responses = append(
-						grpcSender.Responses,
-						&common.CustomResponse{
-							Data: json.RawMessage(
-								strings.ReplaceAll(
-									strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
-									":", " "),
-							),
-							RepeatNumber: resp.RepeatNumber,
-						},
-					)
+					grpcSender.SetResponses(
+						append(
+							grpcSender.GetResponses(),
+							&common.CustomResponse{
+								Data: json.RawMessage(
+									strings.ReplaceAll(
+										strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(resp.Error.Error(), `"`, ""), "\r", ""), "\n", ""),
+										":", " "),
+								),
+								RepeatNumber: resp.RepeatNumber,
+							},
+						))
 				} else {
 					errMsg := fmt.Sprintf(
 						`{"error": "Invalid JSON response", "body": %q}`,
@@ -132,16 +135,20 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 							strings.ReplaceAll(strings.ReplaceAll(strings.ReplaceAll(string(resp.DataBytes), `"`, ""), "\r", ""), "\n", ""),
 							":", " "),
 					)
-					grpcSender.Responses = append(grpcSender.Responses, &common.CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber})
+					grpcSender.SetResponses(
+						append(
+							grpcSender.GetResponses(),
+							&common.CustomResponse{Data: json.RawMessage(errMsg), RepeatNumber: resp.RepeatNumber},
+						))
 				}
 			}
 			close(ch)
 		}
 
 		repetitionChans = nil
-		bytesData, err := json.MarshalIndent(grpcSender.Responses, "", " ")
+		bytesData, err := json.MarshalIndent(grpcSender.GetResponses(), "", " ")
 		if err != nil {
-			for _, item := range grpcSender.Responses {
+			for _, item := range grpcSender.GetResponses() {
 				if len(item.Data) == 0 {
 					item.Data = json.RawMessage(`{"error": "Empty response"}`)
 					continue
@@ -151,10 +158,10 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 					item.Data = json.RawMessage(fmt.Sprintf(`"error": "%s"`, string(item.Data)))
 				}
 			}
-			bytesData, _ = json.MarshalIndent(grpcSender.Responses, "", " ")
+			bytesData, _ = json.MarshalIndent(grpcSender.GetResponses(), "", " ")
 		}
 		grpcSender.SetResponseData(string(bytesData))
-		grpcSender.Responses = nil
+		grpcSender.SetResponses(nil)
 		if !grpcSender.GetNotShowResult() {
 			grpcSender.ShowResp(grpcSender.GetResponseData())
 		}
@@ -270,4 +277,58 @@ func (grpcSender *GrpcSender) switchingAvailability(isOn bool) {
 		grpcSender.ResultCopyBtnHandlerBtn.Disable()
 		grpcSender.ParseMethodsBtn.Disable()
 	}
+}
+
+func (grpcSender *GrpcSender) SaveState(title string) {
+	if title != "" {
+		grpcSender.ParseRepeat()
+		grpcSender.ParseDelay()
+		grpcSender.stateHistory[title] = &grpcState{
+			common.State{
+				Url:           grpcSender.UrlEntry.Text,
+				Params:        grpcSender.ParamsEntry.Text,
+				Method:        *grpcSender.GetMethod(),
+				ResponseData:  "",
+				Repeat:        grpcSender.GetRepeat(),
+				Delay:         grpcSender.GetDelay(),
+				NotShowResult: grpcSender.GetNotShowResult(),
+				Responses:     grpcSender.GetResponses(),
+			},
+			grpcSender.FullServiceNameEntry.Text,
+			grpcSender.MethodsDescription,
+		}
+	}
+}
+
+func (grpcSender *GrpcSender) GetStatesSelect() *widget.Select {
+	var keys []string
+	for k := range grpcSender.stateHistory {
+		keys = append(keys, k)
+	}
+	return widget.NewSelect(keys, func(value string) {})
+}
+
+func (grpcSender *GrpcSender) UseStateByTitle(title string) {
+	state, ok := grpcSender.stateHistory[title]
+	if ok {
+		grpcSender.UrlEntry.SetText(state.Url)
+		grpcSender.ParamsEntry.SetText(state.Params)
+		grpcSender.MethodsDescription = state.MethodsDescription
+		methodNames := make([]string, 0, len(state.MethodsDescription))
+		for _, m := range state.MethodsDescription {
+			methodNames = append(methodNames, m.MethodName)
+		}
+		grpcSender.SelectMethod.Options = methodNames
+		grpcSender.SelectMethod.SetSelected(state.Method)
+		grpcSender.RepeatEntry.SetText(strconv.Itoa(state.Repeat))
+		grpcSender.DelayEntry.SetText(strconv.Itoa(state.Delay))
+		grpcSender.FullServiceNameEntry.SetText(state.FullServiceName)
+		grpcSender.NotShowResultCheckbox.SetChecked(state.NotShowResult)
+		grpcSender.SetResponses(state.Responses)
+	}
+}
+
+func (grpcSender *GrpcSender) Load() {
+	grpcSender.stateHistory = make(map[string]*grpcState)
+	grpcSender.MethodsDescription = make([]*methodDescription, 0)
 }

@@ -1,7 +1,7 @@
 package httpSender
 
 import (
-	common "httpSenderDesktop/common/structs"
+	common "httpSenderDesktop/common/sender"
 
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
@@ -14,7 +14,6 @@ type httpState struct {
 	CookieDefaultExpiration                       int
 	Cookies                                       []CookieInstance
 	UrlencodeData                                 []goutilsCurl.UrlencodeData
-	Responses                                     []*common.CustomResponse
 }
 
 type CookieInstance struct {
