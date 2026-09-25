@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 	"golang.design/x/clipboard"
 )
@@ -169,13 +168,6 @@ func (grpcSender *GrpcSender) SendBtnHandler() *widget.Button {
 	})
 }
 
-func (grpcSender *GrpcSender) GetScrollDisplay() *container.Scroll {
-	return container.NewVScroll(container.NewGridWithRows(
-		1,
-		grpcSender.DisplayEntry,
-	))
-}
-
 func (grpcSender *GrpcSender) GetSelectMethod() *widget.Select {
 	resp := widget.NewSelect([]string{}, func(value string) {
 		grpcSender.SetMethod(value)
@@ -224,23 +216,6 @@ func (grpcSender *GrpcSender) ClearParametersBtnHandler() *widget.Button {
 	})
 }
 
-func (grpcSender *GrpcSender) ResultCopyBtnHandler() *widget.Button {
-	return widget.NewButton("Copy result to clipboard", func() {
-		err := clipboard.Init()
-		if err != nil {
-			errResp := err.Error()
-			grpcSender.ShowResp(&errResp)
-		}
-		clipboard.Write(clipboard.FmtText, []byte(*grpcSender.GetResponseData()))
-	})
-}
-
-func (grpcSender *GrpcSender) NotShowResultCheckboxHandler() *widget.Check {
-	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
-		grpcSender.SetNotShowResult(value)
-	})
-}
-
 func (grpcSender *GrpcSender) switchingAvailability(isOn bool) {
 	if isOn {
 		grpcSender.UrlEntry.Enable()
@@ -259,6 +234,8 @@ func (grpcSender *GrpcSender) switchingAvailability(isOn bool) {
 		grpcSender.CopyMethodDescriptionBtn.Enable()
 		grpcSender.ResultCopyBtnHandlerBtn.Enable()
 		grpcSender.ParseMethodsBtn.Enable()
+		grpcSender.SaveStateBtn.Enable()
+		grpcSender.LoadStateBtn.Enable()
 	} else {
 		grpcSender.UrlEntry.Disable()
 		grpcSender.FullServiceNameEntry.Disable()
@@ -276,6 +253,8 @@ func (grpcSender *GrpcSender) switchingAvailability(isOn bool) {
 		grpcSender.CopyMethodDescriptionBtn.Disable()
 		grpcSender.ResultCopyBtnHandlerBtn.Disable()
 		grpcSender.ParseMethodsBtn.Disable()
+		grpcSender.SaveStateBtn.Disable()
+		grpcSender.LoadStateBtn.Disable()
 	}
 }
 

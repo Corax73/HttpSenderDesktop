@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	"golang.design/x/clipboard"
 )
 
 type CustomResponse struct {
@@ -189,5 +190,29 @@ func (sender *Sender) LoadStateBtnHandler(appWindow fyne.Window) *widget.Button 
 
 		dlg.Resize(fyne.NewSize(300, 170))
 		dlg.Show()
+	})
+}
+
+func (sender *Sender) GetScrollDisplay() *container.Scroll {
+	return container.NewVScroll(container.NewGridWithRows(
+		1,
+		sender.DisplayEntry,
+	))
+}
+
+func (sender *Sender) ResultCopyBtnHandler() *widget.Button {
+	return widget.NewButton("Copy result to clipboard", func() {
+		err := clipboard.Init()
+		if err != nil {
+			errResp := err.Error()
+			sender.ShowResp(&errResp)
+		}
+		clipboard.Write(clipboard.FmtText, []byte(*sender.GetResponseData()))
+	})
+}
+
+func (sender *Sender) NotShowResultCheckboxHandler() *widget.Check {
+	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
+		sender.SetNotShowResult(value)
 	})
 }

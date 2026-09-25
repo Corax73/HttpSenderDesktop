@@ -40,7 +40,7 @@ func main() {
 	httpSender.DelayEntry.SetPlaceHolder("Enter delay, default is 200 milliseconds")
 	httpSender.ScrollContainer = httpSender.GetScrollDisplay()
 	httpSender.ClearResultBtn = httpSender.ClearResultBtnHandler()
-	httpSender.CopyBtn = httpSender.CopyBtnHandler()
+	httpSender.CopyBtn = httpSender.ResultCopyBtnHandler()
 	httpSender.SelectMethod = httpSender.GetSelectMethod()
 	httpSender.ClearParametersBtn = httpSender.ClearParametersBtnHandler()
 	httpSender.SaveResultBtn = httpSender.SaveResultBtnHandler(window)

@@ -12,8 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.design/x/clipboard"
-
 	goutilsCurl "github.com/Corax73/goUtils/curl"
 
 	"fyne.io/fyne/v2"
@@ -220,13 +218,6 @@ func (httpSender *HttpSender) showRepeat(repeatNumber int, isEnd bool, timeSpent
 	strBuilder.Reset()
 }
 
-func (httpSender *HttpSender) GetScrollDisplay() *container.Scroll {
-	return container.NewVScroll(container.NewGridWithRows(
-		1,
-		httpSender.DisplayEntry,
-	))
-}
-
 func (httpSender *HttpSender) GetSelectMethod() *widget.Select {
 	resp := widget.NewSelect([]string{"GET", "POST", "DELETE", "PUT"}, func(value string) {
 		httpSender.SetMethod(value)
@@ -255,17 +246,6 @@ func (httpSender *HttpSender) getParams() (*bytes.Buffer, error) {
 	return responseBody, nil
 }
 
-func (httpSender *HttpSender) CopyBtnHandler() *widget.Button {
-	return widget.NewButton("Copy to clipboard", func() {
-		err := clipboard.Init()
-		if err != nil {
-			errResp := err.Error()
-			httpSender.ShowResp(&errResp)
-		}
-		clipboard.Write(clipboard.FmtText, []byte(*httpSender.GetResponseData()))
-	})
-}
-
 func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
 	return widget.NewButton("Clear all parameters", func() {
 		httpSender.UrlEntry.SetText("")
@@ -278,12 +258,6 @@ func (httpSender *HttpSender) ClearParametersBtnHandler() *widget.Button {
 		httpSender.BasicAuthPasswordEntry.SetText("")
 		httpSender.HeadersEntry.SetText("")
 		httpSender.ResetState()
-	})
-}
-
-func (httpSender *HttpSender) NotShowResultCheckboxHandler() *widget.Check {
-	return widget.NewCheck("Not show result(reduces the load)", func(value bool) {
-		httpSender.SetNotShowResult(value)
 	})
 }
 
